@@ -1,0 +1,67 @@
+# XcodeGen 项目配置 — 在 CI (GitHub Actions macOS) 上生成 Xcode 项目
+# 用法: xcodegen generate  (macOS / CI)
+name: PiAgentRemote
+options:
+  minimumXcodeGenVersion: "2.38.0"
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+# Starscream: 底层 socket WebSocket 库，绕过 NSURLSession，不受 ATS 限制（iOS 18 兼容）
+packages:
+  Starscream:
+    url: https://github.com/daltoniam/Starscream
+    from: 4.0.6
+
+targets:
+  PiAgentRemote:
+    type: application
+    platform: iOS
+    sources:
+      - path: PiAgentRemote
+        excludes:
+          - Info.plist   # Info.plist 单独配置，避免重复打包
+    dependencies:
+      - package: Starscream
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.piagent.remote
+        PRODUCT_NAME: PiAgentRemote
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        CODE_SIGNING_ALLOWED: NO        # CI 不签名，Sideloadly 安装时签名
+        CODE_SIGNING_REQUIRED: NO
+        GENERATE_INFOPLIST_FILE: NO     # 使用我们提供的 Info.plist
+        INFOPLIST_FILE: PiAgentRemote/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon   # 桌面图标（Assets.xcassets/AppIcon.appiconset）
+
+  PiAgentRemoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PiAgentRemoteTests
+    dependencies:
+      - target: PiAgentRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.piagent.remote.tests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+
+schemes:
+  PiAgentRemote:
+    build:
+      targets:
+        PiAgentRemote: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    test:
+      config: Debug
+      targets:
+        - PiAgentRemoteTests

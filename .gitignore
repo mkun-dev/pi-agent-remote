@@ -1,0 +1,33 @@
+# --- Node.js (pi-ios-extension) ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- iOS / Xcode (pi-ios-app) ---
+build/
+DerivedData/
+*.ipa
+*.xcarchive
+xcuserdata/
+*.xcodeproj/xcuserdata/
+.DS_Store
+*.orig
+
+# --- 系统/编辑器 ---
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.log
+nul
+
+# --- 环境/密钥 ---
+.env
+.env.local
+*.pem
+*.key
+
+# pi-ios 扩展配置（含 token，不提交）
+pi-ios-extension/config.json
+pi-ios-extension/config.local.json
+.pi-github-repos/
