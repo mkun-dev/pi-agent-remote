@@ -2,7 +2,8 @@
 # 触发方式：
 #   1. 手动: GitHub 仓库 → Actions → "Build IPA" → Run workflow
 #   2. 打 tag: git tag v1.0 && git push origin v1.0
-# 产物：Actions 页面下载 PiAgentRemote.ipa，用 Sideloadly 装到 iPhone
+#   3. push main: 自动跑 Debug XCTest（不打包 IPA，快速回归）
+# 产物：打 tag / 手动触发时，Actions 页面下载 PiAgentRemote.ipa，用 Sideloadly 装到 iPhone
 
 name: Build IPA
 
@@ -11,6 +12,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'main'
 
 jobs:
   build:
@@ -60,6 +63,8 @@ jobs:
             test
 
       - name: Build (no code signing)
+        # 仅打 tag 或手动触发时打包 Release IPA；push main 只跑 XCTest
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         working-directory: pi-ios-app
         run: |
           xcodebuild \
@@ -73,6 +78,7 @@ jobs:
             build
 
       - name: Package IPA
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         working-directory: pi-ios-app
         run: |
           APP_PATH="build/Build/Products/Release-iphoneos/PiAgentRemote.app"
@@ -88,6 +94,7 @@ jobs:
           ls -lh PiAgentRemote.ipa
 
       - name: Upload IPA
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: PiAgentRemote.ipa
