@@ -1,0 +1,14 @@
+{
+  "name": "pi-ios-relay-server",
+  "version": "0.1.0",
+  "description": "pi-ios NAT 穿透中继服务器（部署到腾讯云）",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.17.1"
+  }
+}

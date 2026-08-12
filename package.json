@@ -1,0 +1,22 @@
+{
+  "name": "pi-agent-remote",
+  "version": "0.2.0",
+  "description": "Pi Agent iOS Remote - 让 iPhone 成为 Pi 的远程终端（消息/Tool/文件/会话/NAT穿透）",
+  "keywords": [
+    "pi-package",
+    "ios",
+    "remote",
+    "mobile"
+  ],
+  "pi": {
+    "extensions": [
+      "./pi-ios-extension/src/index.ts"
+    ]
+  },
+  "dependencies": {
+    "ws": "^8.17.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

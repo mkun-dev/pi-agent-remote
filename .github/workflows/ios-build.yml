@@ -1,0 +1,95 @@
+# 云编译 .ipa — 无需 Mac
+# 触发方式：
+#   1. 手动: GitHub 仓库 → Actions → "Build IPA" → Run workflow
+#   2. 打 tag: git tag v1.0 && git push origin v1.0
+# 产物：Actions 页面下载 PiAgentRemote.ipa，用 Sideloadly 装到 iPhone
+
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: pi-ios-app
+        run: |
+          xcodegen generate
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Test RemoteEvent architecture
+        working-directory: pi-ios-app
+        run: |
+          echo "Available simulator runtimes:"
+          xcrun simctl list runtimes
+          echo "Available simulator devices:"
+          xcrun simctl list devices available
+
+          DESTINATION_ID=$(xcrun simctl list devices available \
+            | awk -F '[()]' '/iPhone/ { print $2; exit }' \
+            | xargs)
+
+          if [ -z "$DESTINATION_ID" ]; then
+            echo "❌ No available iPhone simulator found"
+            exit 1
+          fi
+
+          echo "Using simulator: $DESTINATION_ID"
+          xcrun simctl boot "$DESTINATION_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DESTINATION_ID" -b
+
+          xcodebuild \
+            -project PiAgentRemote.xcodeproj \
+            -scheme PiAgentRemote \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DESTINATION_ID" \
+            test
+
+      - name: Build (no code signing)
+        working-directory: pi-ios-app
+        run: |
+          xcodebuild \
+            -project PiAgentRemote.xcodeproj \
+            -scheme PiAgentRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package IPA
+        working-directory: pi-ios-app
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/PiAgentRemote.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ App 未找到: $APP_PATH"
+            ls -R build/Build/Products 2>/dev/null | head -40
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r PiAgentRemote.ipa Payload
+          echo "✅ IPA 打包完成:"
+          ls -lh PiAgentRemote.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiAgentRemote.ipa
+          path: pi-ios-app/PiAgentRemote.ipa
+          if-no-files-found: error
