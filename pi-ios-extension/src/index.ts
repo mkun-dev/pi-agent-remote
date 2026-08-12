@@ -164,7 +164,6 @@ export default function (pi: ExtensionAPI) {
   function broadcastUsageInfo(recalculateFromSession = true, generation?: number): void {
     try {
       const usage = buildUsageInfo(recalculateFromSession, generation);
-      console.log(`[USAGE] broadcast agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} generation=${generation ?? "none"} model=${(usage.payload as any).model} tokens=${(usage.payload as any).totalTokens} ctx=${(usage.payload as any).contextTokens}/${(usage.payload as any).contextWindow}`);
       broadcast(usage);
     } catch (e) {
       console.error("❌ usage.info 广播失败:", e);
@@ -393,7 +392,7 @@ export default function (pi: ExtensionAPI) {
 
       // 获取可用模型列表
       const models = await resolveAvailableModels();
-      console.log(`[MODEL] command agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} cmd=${JSON.stringify(cmd)} modelsFound=${models.length} sessionCtxReady=${!!sessionCtx}`);
+
       if (models.length === 0) {
         reply("❌ 无法获取模型列表");
         return;
@@ -404,7 +403,7 @@ export default function (pi: ExtensionAPI) {
       if (!query) {
         // 发送模型列表（iOS 端弹出选择器）
         const ids = models.map((m: any) => modelId(m));
-        console.log(`[MODEL] list agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} count=${ids.length}`);
+
         respond(ProtocolHandler.createModelList(ids));
         return;
       }
@@ -435,7 +434,7 @@ export default function (pi: ExtensionAPI) {
     const models = await resolveAvailableModels();
     const modelId = (m: any) => m?.id ?? m?.modelId ?? String(m);
     const ids = models.map((m: any) => modelId(m));
-    console.log(`[MODEL] request agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} generation=${generation ?? "none"} count=${ids.length}`);
+
     respond(ProtocolHandler.createModelList(ids, generation));
   }
 
@@ -458,11 +457,11 @@ export default function (pi: ExtensionAPI) {
       const ok = await pi.setModel(target);
       if (ok) {
         lastModel = modelId;
-        console.log(`[MODEL] select_ack agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} requestId=${selectionRequestId ?? "none"} modelId=${modelId} ok=true`);
+
         respond(ProtocolHandler.createModelSelectAck(modelId, true, undefined, selectionRequestId));
         broadcastUsageInfo();
       } else {
-        console.log(`[MODEL] select_ack agent=${windowAgentId} session=${currentUsageSessionKey() ?? "unknown"} requestId=${selectionRequestId ?? "none"} modelId=${modelId} ok=false`);
+
         respond(ProtocolHandler.createModelSelectAck(modelId, false, undefined, selectionRequestId));
       }
     } catch (e) {
@@ -651,7 +650,7 @@ export default function (pi: ExtensionAPI) {
   async function handleWorkspaceList(msg: any, respond: (event: unknown) => void): Promise<void> {
     const rawPayloadPath = msg?.payload?.path;
     const root = workspaceRoot();
-    console.log(`[workspace] list 请求: raw=${JSON.stringify(rawPayloadPath)} root=${JSON.stringify(root)}`);
+  
     try {
       const requestPath = normalizeWorkspacePath(String(rawPayloadPath ?? ""));
       const abs = resolveWorkspacePath(requestPath);
@@ -667,7 +666,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const { nodes, name } = readWorkspaceDir(abs);
-      console.log(`[workspace] list 成功: ${nodes.length} 个子项`);
+    
       // 回传规范化后的 path 作为 key，确保 iOS 查找与展开一致
       respond(ProtocolHandler.createWorkspaceTree(requestPath, name, nodes));
     } catch (error) {
@@ -696,7 +695,7 @@ export default function (pi: ExtensionAPI) {
         maxTextBytes: WORKSPACE_MAX_TEXT_BYTES,
         maxImageBytes: WORKSPACE_MAX_IMAGE_BYTES,
       });
-      console.log(`[workspace] readFile 成功: path=${requestPath} type=${file.fileType} size=${stat.size}`);
+    
       respond(ProtocolHandler.createWorkspaceFile(file));
     } catch (error) {
       const reason = error instanceof Error ? error.message : "未知错误";
@@ -754,7 +753,7 @@ export default function (pi: ExtensionAPI) {
         if (a.path.length !== b.path.length) return a.path.length - b.path.length;
         return a.filename.localeCompare(b.filename);
       });
-      console.log(`[workspace] search query="${rawQuery}" hits=${hits.length} dirs=${visitedDirs}`);
+    
       respond(ProtocolHandler.createWorkspaceSearchResult(rawQuery, hits));
     } catch (error) {
       const reason = error instanceof Error ? error.message : "未知错误";
@@ -929,7 +928,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const name = pi.getSessionName?.() ?? null;
-      console.log(`[AGENT] relay connect window=${windowAgentId} session=${name ?? "(unnamed)"}`);
+
       relay.connect({ agentId: windowAgentId, name, cwd: ctx.cwd });
       ctx.ui.notify(
         `📱 正在连接中继…\n窗口 ID: ${windowAgentId}\n会话: ${name ?? "（未命名）"}\n目录: ${ctx.cwd}`,

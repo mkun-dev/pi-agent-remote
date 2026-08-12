@@ -39,6 +39,13 @@ let currentTargetAgentId = null;
 let agentSeq = 0;
 
 function log(msg) {
+  if (process.env.RELAY_DEBUG === "1") {
+    console.log(`[${new Date().toISOString()}] ${msg}`);
+  }
+}
+
+// 启动确认日志始终输出（不属于请求日志；测试与部署依赖它确认服务就绪）。
+function bootLog(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
@@ -271,7 +278,7 @@ wss.on("connection", (ws, req) => {
 });
 
 wss.on("listening", () => {
-  log(`🚀 pi-ios relay listening on ws://0.0.0.0:${PORT}（公网请通过反向代理暴露 wss://）`);
+  bootLog(`🚀 pi-ios relay listening on ws://0.0.0.0:${PORT}（公网请通过反向代理暴露 wss://）`);
   if (ALLOW_QUERY_TOKEN) {
     log("⚠️  兼容旧版 URL Token；确认所有客户端升级后设置 ALLOW_QUERY_TOKEN=0");
   }
