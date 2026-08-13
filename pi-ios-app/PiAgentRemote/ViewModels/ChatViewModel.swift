@@ -290,7 +290,8 @@ class ChatViewModel: ObservableObject {
         if conversationStore.workspaceFiles[path] == nil {
             loadWorkspaceFile(path: path)
         }
-        activeTab = 1
+        // tab 索引：0=首页 1=聊天 2=文件 3=设置
+        activeTab = 2
     }
     
     func switchTarget(to agentId: String) {

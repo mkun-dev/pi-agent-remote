@@ -17,22 +17,21 @@ struct ContentView: View {
     
     var body: some View {
         TabView(selection: $viewModel.activeTab) {
+            // 首页（Dashboard）：Agent 状态 + 最近进展 + 快速继续
+            DashboardView(viewModel: viewModel)
+            .tabItem { Label("首页", systemImage: "house") }
+            .tag(0)
+            
             NavigationView {
                 ChatView(viewModel: viewModel)
             }
             .tabItem { Label("聊天", systemImage: "message.fill") }
-            .tag(0)
+            .tag(1)
             
             NavigationView {
                 WorkspaceExplorerView(viewModel: viewModel)
             }
             .tabItem { Label("文件", systemImage: "folder") }
-            .tag(1)
-            
-            NavigationView {
-                ActivityView(viewModel: viewModel)
-            }
-            .tabItem { Label("活动", systemImage: "clock.arrow.circlepath") }
             .tag(2)
             
             NavigationView {

@@ -105,6 +105,40 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertTrue(store.activityEvents.contains(where: { $0.type == .fileChange }))
     }
     
+    /// 多窗口隔离（B3）：切窗口后 Timeline (activityEvents) 与 Trace 不得残留上一窗口历史。
+    /// switchTarget → reset → clearSessionScopedProjection → clearConversationProjection
+    /// 必须清空 activityEvents 与 currentTrace。
+    func testSwitchTargetClearsTimelineAndTrace_NoCrossWindowLeak() {
+        let store = ConversationStore()
+        // 窗口 A（win-a）：产生一条 file.change → activity + trace
+        store.setCurrentAgentId("win-a")
+        store.accept(event("a-turn",
+            .agent(.status(RemoteAgentStatus(value: "receiving", tool: nil, description: nil))),
+            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
+        store.accept(event("a-file",
+            .file(RemoteFileEvent(path: "a.swift", action: .modified, additions: 2, deletions: 0)),
+            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
+        XCTAssertFalse(store.activityEvents.isEmpty, "窗口 A 应已产生 activity")
+        XCTAssertNotNil(store.currentTrace, "窗口 A 应已产生 trace")
+        XCTAssertEqual(store.messages.count, 1)
+        
+        // 模拟 ChatViewModel.switchTarget(to:)：设新 agent + reset + 清空
+        store.setCurrentAgentId("win-b")
+        store.reset()
+        
+        // 切到 B 后，A 的 Timeline / Trace / messages 全部清空，不得残留。
+        XCTAssertTrue(store.activityEvents.isEmpty, "切窗口后 activityEvents 必须为空（B3）")
+        XCTAssertNil(store.currentTrace, "切窗口后 currentTrace 必须为 nil（B3）")
+        XCTAssertTrue(store.messages.isEmpty, "切窗口后 messages 必须为空")
+        XCTAssertTrue(store.recentChanges.isEmpty, "切窗口后 recentChanges 必须为空")
+        
+        // 且 A 的迟到事件不会再进入（agent 过滤）。
+        store.accept(event("a-late-file",
+            .file(RemoteFileEvent(path: "a-late.swift", action: .modified, additions: 1, deletions: 0)),
+            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
+        XCTAssertTrue(store.activityEvents.isEmpty, "迟到 A 事件不得污染当前窗口")
+    }
+    
     func testSessionHistoryReplacementDoesNotLeakPreviousSession() {
         let store = ConversationStore()
         let first = RemoteHistoryEntry(

@@ -492,7 +492,7 @@ struct FileViewerView: View {
         let selection = (supportsSearch && !searchText.isEmpty) ? "搜索: \(searchText)" : nil
         viewModel.conversationStore.setPendingFileContext(files: [path], selection: selection)
         viewModel.inputText = "关于 \(file.fileName)："
-        viewModel.activeTab = 0
+        viewModel.activeTab = 1   // tab 索引：0=首页 1=聊天
         dismiss()
     }
     
@@ -501,7 +501,7 @@ struct FileViewerView: View {
         guard let viewModel else { return }
         viewModel.conversationStore.clearPendingFileContext()
         viewModel.inputText = "参考文件：\(path)\n"
-        viewModel.activeTab = 0
+        viewModel.activeTab = 1   // tab 索引：0=首页 1=聊天
         dismiss()
     }
 }

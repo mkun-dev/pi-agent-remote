@@ -1355,6 +1355,8 @@ final class ConversationStore: ObservableObject {
         pendingFileContext = nil
         pendingWorkspaceFile = nil
         recentChanges.removeAll()
+        // 注意：Timeline (activityEvents) 与 Trace 由 clearConversationProjection() 清空
+        // （本函数在上方已调用），切换窗口时一并归零，不跨窗口残留。
     }
     
     private func normalizeSessionFile(_ value: String?) -> String? {

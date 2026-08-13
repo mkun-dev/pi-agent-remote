@@ -72,6 +72,14 @@ function validIdentifier(value) {
   return typeof value === "string" && /^[a-zA-Z0-9._:-]{8,128}$/.test(value);
 }
 
+function agentSortKey(meta, id) {
+  const m = meta || {};
+  const name = (typeof m.name === "string" && m.name.trim()) || "";
+  const cwd = (typeof m.cwd === "string" && m.cwd.trim()) || "";
+  // 与 iOS displayName 优先级一致：name > cwd > agentId，保证同样窗口集合顺序稳定。
+  return (name || cwd || id).toLowerCase();
+}
+
 function agentList() {
   const list = [];
   for (const [id, ws] of agents) {
@@ -81,6 +89,13 @@ function agentList() {
       ...(agentMeta.get(id) || {}),
     });
   }
+  // 多窗口稳定排序（B4）：按 name/cwd/agentId 排序，避免重连导致列表抖动。
+  list.sort((a, b) => {
+    const ka = agentSortKey(a, a.agentId);
+    const kb = agentSortKey(b, b.agentId);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return a.agentId < b.agentId ? -1 : 1;
+  });
   return list;
 }
 
@@ -241,6 +256,10 @@ wss.on("connection", (ws, req) => {
 
       const msgId = msg?.id;
       const targetAgentId = msg?.payload?.targetAgentId;
+      // 路由解析（B2）：禁止在多窗口下猜测目标 Agent。
+      //   - 明确指定 targetAgentId：按指定路由（不存在/离线 → agent_offline）。
+      //   - 未指定但当前只有一个 Agent：保留无歧义 fallback，兼容单窗口模式。
+      //   - 未指定且多个 Agent 在线：返回 ambiguous_target，绝不猜测。
       let target = null;
       if (targetAgentId) {
         target = agents.get(targetAgentId);
@@ -249,9 +268,15 @@ wss.on("connection", (ws, req) => {
           return;
         }
         currentTargetAgentId = targetAgentId;
-      } else if (agents.size > 0) {
+      } else if (agents.size === 1) {
+        // 单窗口：唯一 Agent，无歧义，保留 fallback。
         syncCurrentTargetAgent();
         target = currentTargetAgentId ? agents.get(currentTargetAgentId) : null;
+      } else if (agents.size > 1) {
+        // 多窗口：缺省 target 视为歧义，拒绝猜测（B2）。
+        log(`❌ 拒绝路由: 多 Agent 在线但请求未指定 targetAgentId (${ws.remoteAddr})`);
+        safeSend(ws, { type: "relay.error", payload: { id: msgId ?? null, code: "ambiguous_target" } });
+        return;
       }
 
       if (target && target.readyState === WebSocket.OPEN) {
