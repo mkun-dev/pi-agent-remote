@@ -14,7 +14,7 @@ import { RelayClient } from "./relay-client.js";
 import { countPatchChanges, countTextLines, extractFilePath, isFileMutationTool } from "./file-change-utils.js";
 import { buildHistory } from "./session-history.js";
 import { saveUploadedImage } from "./media-upload.js";
-import { addUsage, maxUsage, summarizeBranchUsage, zeroUsageAccumulator, type UsageAccumulator } from "./usage-accumulator.js";
+import { addUsage, maxUsage, summarizeBranchUsage, zeroUsageAccumulator, shouldSkipDuplicateTurnEnd, type UsageAccumulator } from "./usage-accumulator.js";
 import type { SessionInfo, SessionListItem, ProtocolMessage } from "./types.js";
 
 /**
@@ -92,6 +92,8 @@ export default function (pi: ExtensionAPI) {
   // ================= 模型与用量统计 =================
   let usageAcc: UsageAccumulator = zeroUsageAccumulator();
   let usageSessionKey: string | null = null;
+  // 最近一次 turn_end 的 messageId（N2：防止同 turn 重复触发导致 usage 翻倍）
+  let lastTurnEndMessageId: string | null = null;
   // 最近一次已知模型（ctx.model 在非 turn 期间可能为 undefined）
   let lastModel: string | null = null;
 
@@ -105,6 +107,7 @@ export default function (pi: ExtensionAPI) {
   function resetUsageAccumulator(sessionKey: string | null = currentUsageSessionKey()): void {
     usageAcc = zeroUsageAccumulator();
     usageSessionKey = sessionKey;
+    lastTurnEndMessageId = null;
   }
   
   // 从会话历史累计用量（与 hud-footer 同法：provider 流式不报 usage，但历史消息有真实值）
@@ -1048,8 +1051,13 @@ export default function (pi: ExtensionAPI) {
 
   // Turn 结束：累计用量、收尾思考增量、处理错误（正文由 assistant.* 流式发送）
   pi.on("turn_end", async (event, _ctx) => {
-    // 累计用量（模型/上下文/缓存命中统计）
-    accumulateUsage((event as any).message?.usage);
+    // 累计用量（模型/上下文/缓存命中统计）—— 同一 messageId 重复触发时跳过，防止翻倍（N2）
+    const turnMessageId = (event as any)?.message?.id ?? null;
+    const [skipDup, nextSeen] = shouldSkipDuplicateTurnEnd(turnMessageId, lastTurnEndMessageId);
+    if (!skipDup) {
+      lastTurnEndMessageId = nextSeen;
+      accumulateUsage((event as any).message?.usage);
+    }
     // 缓存当前模型（供 usage 查询；ctx.model 非 turn 期间可能为空）
     const modelId = (event as any).message?.model;
     if (typeof modelId === "string" && modelId) {

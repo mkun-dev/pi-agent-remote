@@ -210,6 +210,30 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertFalse(store.showQuestionnaire)
     }
     
+    func testPendingSessionDropsSessionIdOnlyEventWithoutSessionFile_B3() {
+        // B3：pendingSessionFile 期间，仅有 sessionId、无 sessionFile 的事件应被丢弃
+        let store = ConversationStore()
+        store.setCurrentAgentId("win-a")
+        // 先建立一个已知会话身份
+        store.accept(event("info-a", .session(.info(sessionInfo("session-a", file: "sessions/a.jsonl"))),
+                          scope: .init(agentId: "win-a", sessionId: "session-a", sessionFile: "sessions/a.jsonl", targetAgentId: nil)))
+        // 发起切换到 b（进入 pending，期待 sessions/b.jsonl）
+        store.beginSessionSwitch(expectedSessionFile: "sessions/b.jsonl")
+
+        // 旧会话风格的迟到事件：只带 sessionId、不带 sessionFile —— 应被丢弃
+        store.accept(event("late-usage", .usage(RemoteUsageEvent(
+            model: "claude", contextTokens: 1, contextWindow: 10, contextPercent: 10,
+            totalInput: 1, totalOutput: 2, totalCacheRead: 0, totalCacheWrite: 0,
+            totalReasoning: 0, totalTokens: 3, totalCost: 0
+        )), scope: .init(agentId: "win-a", sessionId: "session-a", sessionFile: nil, targetAgentId: nil)))
+        XCTAssertNil(store.usageInfo, "pending 期间 sessionId-only 事件不应被接受")
+
+        // 正确会话（带匹配的 sessionFile）的事件仍放行：session.info 解除 pending
+        store.accept(event("info-b", .session(.info(sessionInfo("session-b", file: "sessions/b.jsonl"))),
+                          scope: .init(agentId: "win-a", sessionId: "session-b", sessionFile: "sessions/b.jsonl", targetAgentId: nil)))
+        XCTAssertEqual(store.sessionState?.sessionId, "session-b")
+    }
+
     func testUnscopedUsageAndModelAreIgnoredWhenSessionKnown() {
         let store = ConversationStore()
         store.setCurrentAgentId("win-a")

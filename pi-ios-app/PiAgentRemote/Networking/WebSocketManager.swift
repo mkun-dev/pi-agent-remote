@@ -28,6 +28,8 @@ class WebSocketManager: ObservableObject {
     /// 连接状态变更回调（connected: 是否已连接, status: 描述），供上层同步 ConversationStore。
     var onConnectionStateChanged: ((Bool, String) -> Void)?
     var onRemoteEvent: ((RemoteEvent) -> Void)?
+    /// 目标窗口离线回调（relay.error code=agent_offline）：供上层主动 fallback，不等 relay.agents（N1）。
+    var onTargetAgentOffline: (() -> Void)?
     /// 统一 Agent 状态事件回调，由 ChatViewModel 的 Reducer 消费。
     var onAgentStateEvent: ((AgentStateEvent) -> Void)?
     
@@ -151,14 +153,6 @@ class WebSocketManager: ObservableObject {
             )
         }
 
-        if proto.type == "relay.agent_leave" {
-            // 当前目标窗口离开时，切换到剩余的第一个窗口
-            let leftId = proto.payload.agentId ?? ""
-            if leftId == currentAgentId {
-                // 只剩下线了，后续 relay.agents 会更新；这里先置空避免发到已关闭的窗口
-            }
-        }
-
         if proto.type == "agent.status", let agentStatus = proto.payload.status {
             onAgentStateEvent?(.remoteStatus(
                 status: agentStatus,
@@ -202,11 +196,17 @@ class WebSocketManager: ObservableObject {
             }
         }
 
-        // Phase 3 NAT 穿透: relay ACK
+        // Phase 3 NAT 穿透: relay ACK / ERROR
         if proto.type == "relay.ack" || proto.type == "relay.error" {
             let ok = proto.type == "relay.ack"
             if let id = proto.payload.id {
                 onDeliveryResult?(id, ok)
+            }
+            // 目标窗口离线：主动清空 Transport 目标并通知上层即时 fallback（N1）
+            if proto.type == "relay.error", proto.payload.code == "agent_offline" {
+                RemoteLogger.ws("[WS] target agent offline, fallback")
+                currentAgentId = nil
+                onTargetAgentOffline?()
             }
         }
 

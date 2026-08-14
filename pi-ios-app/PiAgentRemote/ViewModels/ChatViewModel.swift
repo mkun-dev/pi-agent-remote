@@ -17,8 +17,10 @@ class ChatViewModel: ObservableObject {
     
     private var pendingImageUploads: [(messageId: String, attachmentId: String, fileName: String)] = []
     private var confirmedMediaFileNames: Set<String> = []
-    /// 标记是否已在首次发现在线窗口后同步过模型/用量（避免重复请求）
-    private var didInitialModelSync = false
+    /// 记录已做过 first-agent-sync 的 agentId（按 agent 记忆，避免重复请求；切 agent 后对新 agent 重新生效）
+    private var lastSyncedAgentId: String?
+    /// 程序化 switchTarget 期间置位，抑制 $currentAgentId sink 的 bootstrap，避免双快照（B2）
+    private var isSwitchingTarget = false
     private var nextSnapshotGeneration = 0
     private var lastActiveSnapshotAt: Date?
     
@@ -84,6 +86,11 @@ class ChatViewModel: ObservableObject {
             self?.conversationStore.accept(event)
         }
         
+        ws.onTargetAgentOffline = { [weak self] in
+            // 目标窗口离线：即时 fallback，随后 $currentAgentId 变化触发 bootstrap 快照（N1）
+            self?.conversationStore.handleTargetAgentOffline()
+        }
+        
         ws.onAgentStateEvent = { [weak self] event in
             // 远端 Agent 事件已由 store.accept() 统一处理（同一消息会同时触发
             // onRemoteEvent 和 onAgentStateEvent）。这里丢弃远端事件，避免双重处理。
@@ -118,8 +125,10 @@ class ChatViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] hasAgents in
                 guard let self = self else { return }
-                if hasAgents && !self.didInitialModelSync {
-                    self.didInitialModelSync = true
+                // 按 agent 记忆：每个 agent 首次出现时同步一次，切回/切换到新 agent 仍会触发（B1）
+                let currentAgent = self.conversationStore.currentAgentId
+                if hasAgents && self.lastSyncedAgentId != currentAgent {
+                    self.lastSyncedAgentId = currentAgent
                     self.requestTargetSnapshot(reason: "first-agent-sync")
                 }
             }
@@ -131,6 +140,8 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] agentId in
                 guard let self = self else { return }
                 self.ws.setPreferredTargetAgentId(agentId)
+                // 程序化 switchTarget 已自带显式快照，此处抑制避免双快照（B2）
+                if self.isSwitchingTarget { return }
                 if self.conversationStore.isConnected,
                    agentId != nil,
                    self.conversationStore.sessionState == nil,
@@ -295,6 +306,9 @@ class ChatViewModel: ObservableObject {
     }
     
     func switchTarget(to agentId: String) {
+        // 抑制 $currentAgentId sink 的 bootstrap，由本方法显式发一次快照（避免双快照 B2）
+        isSwitchingTarget = true
+        defer { isSwitchingTarget = false }
         applyAgentStateEvent(.disconnected)
         conversationStore.setCurrentAgentId(agentId)
         ws.switchTarget(to: agentId)

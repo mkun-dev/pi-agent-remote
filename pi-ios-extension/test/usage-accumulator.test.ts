@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-ignore Node test runner loads erasable TypeScript directly.
-import { addUsage, maxUsage, summarizeBranchUsage, zeroUsageAccumulator } from "../src/usage-accumulator.ts";
+import { addUsage, maxUsage, summarizeBranchUsage, zeroUsageAccumulator, shouldSkipDuplicateTurnEnd } from "../src/usage-accumulator.ts";
 
 test("summarizeBranchUsage totals assistant usage and discovers model", () => {
   const branch = [
@@ -48,4 +48,42 @@ test("addUsage treats undefined or provider-missing fields as zero", () => {
     totalTokens: 9,
     cost: 0,
   });
+});
+
+test("shouldSkipDuplicateTurnEnd skips same messageId and updates seen", () => {
+  // 首次出现：不跳过，记录 seen
+  const [skip1, seen1] = shouldSkipDuplicateTurnEnd("msg-1", null);
+  assert.equal(skip1, false);
+  assert.equal(seen1, "msg-1");
+
+  // 同一 messageId 再次出现：跳过，seen 不变
+  const [skip2, seen2] = shouldSkipDuplicateTurnEnd("msg-1", "msg-1");
+  assert.equal(skip2, true);
+  assert.equal(seen2, "msg-1");
+
+  // 不同 messageId：不跳过，更新 seen
+  const [skip3, seen3] = shouldSkipDuplicateTurnEnd("msg-2", "msg-1");
+  assert.equal(skip3, false);
+  assert.equal(seen3, "msg-2");
+});
+
+test("shouldSkipDuplicateTurnEnd does not skip when messageId is empty or missing", () => {
+  // 空 id（无法判定）→ 保守不跳过，seen 不变
+  const [skipEmpty, seenEmpty] = shouldSkipDuplicateTurnEnd("", "msg-1");
+  assert.equal(skipEmpty, false);
+  assert.equal(seenEmpty, "msg-1");
+
+  const [skipNull, seenNull] = shouldSkipDuplicateTurnEnd(null, "msg-1");
+  assert.equal(skipNull, false);
+  assert.equal(seenNull, "msg-1");
+
+  const [skipUndef, seenUndef] = shouldSkipDuplicateTurnEnd(undefined, null);
+  assert.equal(skipUndef, false);
+  assert.equal(seenUndef, null);
+});
+
+test("shouldSkipDuplicateTurnEnd trims whitespace before comparing", () => {
+  const [skip, seen] = shouldSkipDuplicateTurnEnd("  msg-1  ", "msg-1");
+  assert.equal(skip, true);
+  assert.equal(seen, "msg-1");
 });

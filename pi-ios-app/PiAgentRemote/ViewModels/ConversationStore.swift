@@ -339,8 +339,10 @@ final class ConversationStore: ObservableObject {
                     RemoteLogger.event("[EVENT] ignore pending-session mismatch expected=\(expectedFile) event=\(eventFile) id=\(event.id)")
                     return true
                 }
-            } else if event.scope.sessionId == nil {
-                RemoteLogger.event("[EVENT] ignore unscoped event during session switch id=\(event.id)")
+            } else {
+                // pending 期间没有可匹配的 sessionFile 时一律丢弃（B3）：
+                // 仅带 sessionId 无法证明属于新会话；session.info 会带 sessionFile 解除 pending。
+                RemoteLogger.event("[EVENT] ignore session event without matching sessionFile during pending id=\(event.id)")
                 return true
             }
         }
@@ -1013,6 +1015,20 @@ final class ConversationStore: ObservableObject {
         case .status, .acknowledged, .failed:
             break
         }
+    }
+    
+    /// 目标窗口离线主动 fallback（N1）：由 Transport 在收到 relay.error code=agent_offline 时调用，
+    /// 不必等待下一轮 relay.agents 推送。语义与 .agentLeft 一致：剔除离线窗口、选下一个、reset。
+    func handleTargetAgentOffline() {
+        guard let offlineId = currentAgentId else { return }
+        agents.removeAll { $0.agentId == offlineId }
+        let next = agents.first?.agentId
+        RemoteLogger.session("[SESSION] target offline fallback \(offlineId) -> \(next ?? "nil")")
+        if currentAgentId != next {
+            currentAgentId = next
+            reset()
+        }
+        isAgentOnline = !agents.isEmpty
     }
     
     private func handleQuestionnaire(_ value: RemoteQuestionnaireEvent, event: RemoteEvent) {
