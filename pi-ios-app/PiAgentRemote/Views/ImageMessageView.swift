@@ -40,8 +40,8 @@ struct ImageMessageView: View {
             
             if !caption.isEmpty {
                 Text(caption)
-                    .font(.body)
-                    .foregroundStyle(message.isUser ? Color.white : Color.primary)
+                    .font(PiDesignSystem.Font.body)
+                    .foregroundStyle(message.isUser ? Color.white : PiDesignSystem.Color.primary)
                     .multilineTextAlignment(message.isUser ? .trailing : .leading)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12)
@@ -51,7 +51,7 @@ struct ImageMessageView: View {
             
             if let statusText {
                 Label(statusText, systemImage: statusIcon)
-                    .font(.caption2.weight(.medium))
+                    .font(PiDesignSystem.Font.caption2)
                     .foregroundStyle(statusColor)
                     .padding(.horizontal, 12)
                     .padding(.top, caption.isEmpty ? 5 : 0)
@@ -64,7 +64,7 @@ struct ImageMessageView: View {
         .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 17, style: .continuous)
-                .stroke(Color.secondary.opacity(message.isUser ? 0 : 0.12), lineWidth: 1)
+                .stroke(PiDesignSystem.Color.border.opacity(message.isUser ? 0 : 1), lineWidth: 1)
         }
     }
     
@@ -76,7 +76,7 @@ struct ImageMessageView: View {
             onOpen: onOpen
         )
         .frame(width: 252, height: 210)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .piPreviewClip(radius: 14)
     }
     
     private var multiImageGrid: some View {
@@ -98,7 +98,7 @@ struct ImageMessageView: View {
     }
     
     private var bubbleColor: Color {
-        message.isUser ? Color.blue : Color(uiColor: .secondarySystemBackground)
+        message.isUser ? PiDesignSystem.Color.userBubbleStart : PiDesignSystem.Color.surface
     }
     
     private var statusText: String? {
@@ -120,11 +120,11 @@ struct ImageMessageView: View {
     }
     
     private var statusColor: Color {
-        if message.attachments.contains(where: { $0.status == .failed }) { return .red }
+        if message.attachments.contains(where: { $0.status == .failed }) { return PiDesignSystem.Color.failed }
         if message.attachments.allSatisfy({ $0.status == .completed }) {
-            return message.isUser ? .white.opacity(0.85) : .green
+            return message.isUser ? .white.opacity(0.85) : PiDesignSystem.Color.completed
         }
-        return message.isUser ? .white.opacity(0.9) : .orange
+        return message.isUser ? .white.opacity(0.9) : PiDesignSystem.Color.thinking
     }
 }
 
@@ -138,7 +138,7 @@ private struct CachedAttachmentImage: View {
     
     var body: some View {
         ZStack {
-            Color(uiColor: .tertiarySystemBackground)
+            PiDesignSystem.Color.panelElevated
             if let image {
                 Button {
                     onOpen(ImagePreviewItem(
@@ -193,7 +193,7 @@ private struct CachedAttachmentImage: View {
     private var attachmentStatusOverlay: some View {
         switch attachment.status {
         case .uploading, .processing:
-            Color.black.opacity(0.2)
+            PiDesignSystem.Color.background.opacity(0.32)
                 .overlay {
                     ProgressView()
                         .tint(.white)
@@ -201,7 +201,7 @@ private struct CachedAttachmentImage: View {
                 }
                 .allowsHitTesting(false)
         case .failed:
-            Color.black.opacity(0.3)
+            PiDesignSystem.Color.failed.opacity(0.35)
                 .overlay {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.title2)

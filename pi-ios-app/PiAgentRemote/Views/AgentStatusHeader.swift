@@ -58,15 +58,15 @@ struct AgentStatusHeader: View {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
                         .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                     Text("最近: \(lastActivity.title)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(PiDesignSystem.Font.caption2)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                         .lineLimit(1)
                     Spacer()
                     Text(lastActivity.timestamp, style: .time)
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .font(PiDesignSystem.Font.monoDigit)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 6)
@@ -108,7 +108,7 @@ struct AgentStatusHeader: View {
                 } label: {
                     Image(systemName: "list.bullet.indent")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(PiDesignSystem.Color.accent)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("查看任务时间线")
@@ -117,7 +117,7 @@ struct AgentStatusHeader: View {
             // 窗口 / 会话选择器
             Menu {
                 if store.agents.isEmpty {
-                    Text("无在线窗口").font(.caption).foregroundColor(.secondary)
+                    Text("无在线窗口").font(PiDesignSystem.Font.caption).foregroundStyle(PiDesignSystem.Color.secondary)
                 } else {
                     ForEach(store.agents) { agent in
                         Button {
@@ -143,7 +143,7 @@ struct AgentStatusHeader: View {
                     Image(systemName: "chevron.down").font(.caption2)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Color.gray.opacity(0.12), in: Capsule())
+                .piCapsuleSurface()
             }
             
             // 连接/断开
@@ -151,7 +151,7 @@ struct AgentStatusHeader: View {
                 Button(action: onToggleConnection) {
                     Image(systemName: store.isConnected ? "pause.circle" : "arrow.clockwise.circle")
                         .font(.system(size: 15))
-                        .foregroundColor(store.isConnected ? .orange : .blue)
+                        .foregroundStyle(store.isConnected ? PiDesignSystem.Color.thinking : PiDesignSystem.Color.accent)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(store.isConnected ? "断开连接" : "重新连接")
@@ -159,8 +159,7 @@ struct AgentStatusHeader: View {
             
             Image(systemName: isDetailExpanded ? "chevron.up" : "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .rotationEffect(.degrees(isDetailExpanded ? 0 : 0))
+                .foregroundStyle(PiDesignSystem.Color.secondary)
                 .opacity(0.5)
         }
     }
@@ -176,7 +175,7 @@ struct AgentStatusHeader: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseScale)
             Text(connectionLabel)
                 .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
         }
     }
     
@@ -185,15 +184,30 @@ struct AgentStatusHeader: View {
     }
     
     private var connectionColor: Color {
-        if !store.isConnected { return .red }
-        if !store.isAgentOnline { return .orange }
-        return .green
+        switch store.connectionSnapshot.phase {
+        case .connected:
+            return store.isAgentOnline ? PiDesignSystem.Color.connected : PiDesignSystem.Color.pcOffline
+        case .connecting, .reconnecting:
+            return PiDesignSystem.Color.pcOffline
+        case .error, .disconnected:
+            return PiDesignSystem.Color.failed
+        }
     }
     
     private var connectionLabel: String {
-        if !store.isConnected { return "离线" }
-        if !store.isAgentOnline { return "PC 离线" }
-        return "在线"
+        switch store.connectionSnapshot.phase {
+        case .connecting:
+            return "连接中"
+        case .reconnecting:
+            return "重连中"
+        case .connected:
+            if !store.isAgentOnline { return "PC 离线" }
+            return "在线"
+        case .error:
+            return store.connectionSnapshot.summary
+        case .disconnected:
+            return "离线"
+        }
     }
     
     // MARK: - Status Label
@@ -211,6 +225,10 @@ struct AgentStatusHeader: View {
     }
     
     private var statusText: String {
+        if !store.isConnected { return store.connectionSnapshot.summary }
+        if store.connectionSnapshot.summary == "当前窗口离线" || store.connectionSnapshot.summary == "目标窗口不明确" {
+            return store.connectionSnapshot.summary
+        }
         switch store.agentState {
         case .idle:       return "就绪"
         case .receiving:  return "接收中"
@@ -224,13 +242,26 @@ struct AgentStatusHeader: View {
     }
     
     private var statusColor: Color {
+        if !store.isConnected {
+            switch store.connectionSnapshot.phase {
+            case .connecting, .reconnecting:
+                return PiDesignSystem.Color.thinking
+            case .error, .disconnected:
+                return PiDesignSystem.Color.failed
+            case .connected:
+                return PiDesignSystem.Color.secondary
+            }
+        }
+        if store.connectionSnapshot.summary == "当前窗口离线" || store.connectionSnapshot.summary == "目标窗口不明确" {
+            return PiDesignSystem.Color.thinking
+        }
         switch store.agentState {
-        case .idle:       return .secondary
-        case .receiving, .thinking, .planning: return .orange
-        case .usingTool:  return .purple
-        case .streaming:  return .blue
-        case .completed:  return .green
-        case .error:      return .red
+        case .idle:       return PiDesignSystem.Color.secondary
+        case .receiving, .thinking, .planning: return PiDesignSystem.Color.thinking
+        case .usingTool:  return PiDesignSystem.Color.tool
+        case .streaming:  return PiDesignSystem.Color.streaming
+        case .completed:  return PiDesignSystem.Color.completed
+        case .error:      return PiDesignSystem.Color.failed
         }
     }
     
@@ -240,8 +271,8 @@ struct AgentStatusHeader: View {
     private var thinkingDots: some View {
         if reduceMotion {
             Text("…")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.orange)
+                .font(PiDesignSystem.Font.captionBold)
+                .foregroundStyle(PiDesignSystem.Color.thinking)
         } else {
             AnimatedThinkingDots()
         }
@@ -251,12 +282,12 @@ struct AgentStatusHeader: View {
     private var workingAnimation: some View {
         if reduceMotion {
             Image(systemName: "circle.dotted")
-                .font(.caption2)
-                .foregroundStyle(.orange)
+                .font(PiDesignSystem.Font.caption2)
+                .foregroundStyle(PiDesignSystem.Color.thinking)
         } else {
             ProgressView()
                 .scaleEffect(0.6)
-                .tint(.orange)
+                .tint(PiDesignSystem.Color.thinking)
         }
     }
     
@@ -264,49 +295,64 @@ struct AgentStatusHeader: View {
     
     @ViewBuilder
     private var detailRow: some View {
-        HStack(spacing: 10) {
-            if case let .usingTool(tool, description) = store.agentState {
-                toolBadge(name: tool, detail: description)
-            } else if let trace = store.currentTrace, trace.shouldDisplay {
-                HStack(spacing: 3) {
-                    Image(systemName: "list.clipboard")
-                        .font(.system(size: 9))
-                    Text("\(trace.operationCount) 个步骤")
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(.purple)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.purple.opacity(0.1), in: Capsule())
-            }
-            
-            let displayModel = store.currentModel ?? store.usageInfo?.model
-            if let model = displayModel {
-                modelBadge(model)
-            }
-            
-            if let session = store.sessionState {
-                sessionBadge(session.displayName)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                statusTile(title: "Relay", value: relayValue, icon: "dot.radiowaves.left.and.right", color: connectionColor)
+                statusTile(title: "Agent", value: agentValue, icon: "desktopcomputer", color: store.isAgentOnline ? PiDesignSystem.Color.connected : PiDesignSystem.Color.pcOffline)
+                statusTile(title: "Target", value: targetValue, icon: "macwindow", color: PiDesignSystem.Color.secondary)
             }
 
-            // Transient model switch result (non-chat feedback)
-            if let sel = store.lastModelSelection {
-                modelSwitchPill(sel: sel)
-                    .onAppear {
-                        // Auto-dismiss after 4s
-                        let modelId = sel.modelId
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                            if store.lastModelSelection?.modelId == modelId {
-                                store.clearModelSelectionFeedback()
-                            }
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if case let .usingTool(tool, description) = store.agentState {
+                        toolBadge(name: tool, detail: description)
+                    } else if let trace = store.currentTrace, trace.shouldDisplay {
+                        compactBadge(icon: "list.clipboard", text: "\(trace.operationCount) 个步骤", color: PiDesignSystem.Color.tool)
                     }
-            }
+                    
+                    let displayModel = store.currentModel ?? store.usageInfo?.model
+                    if let model = displayModel {
+                        modelBadge(model)
+                    }
+                    
+                    if let session = store.sessionState {
+                        sessionBadge(session.displayName)
+                    }
 
-            Spacer(minLength: 0)
+                    if let sel = store.lastModelSelection {
+                        modelSwitchPill(sel: sel)
+                            .onAppear {
+                                let modelId = sel.modelId
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                                    if store.lastModelSelection?.modelId == modelId {
+                                        store.clearModelSelectionFeedback()
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+            
+            if isDetailExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let error = store.connectionSnapshot.lastError, !error.isEmpty {
+                        infoRow(icon: "exclamationmark.triangle.fill", text: error, color: PiDesignSystem.Color.failed)
+                    } else if let detail = store.connectionSnapshot.detail, !detail.isEmpty {
+                        infoRow(icon: "link", text: detail, color: PiDesignSystem.Color.secondary)
+                    }
+                    if let lastConnectedAt = store.connectionSnapshot.lastConnectedAt {
+                        infoRow(icon: "checkmark.circle", text: "上次连接 \(timeFormatter.string(from: lastConnectedAt))", color: PiDesignSystem.Color.secondary)
+                    }
+                    if let lastDisconnectedAt = store.connectionSnapshot.lastDisconnectedAt,
+                       !store.isConnected {
+                        infoRow(icon: "xmark.circle", text: "上次断开 \(timeFormatter.string(from: lastDisconnectedAt))", color: PiDesignSystem.Color.secondary)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .font(.caption2)
-        .padding(.top, 4)
+        .padding(.top, 6)
     }
     
     private func toolBadge(name: String, detail: String) -> some View {
@@ -323,13 +369,13 @@ struct AgentStatusHeader: View {
             if elapsedSeconds > 0 {
                 Text(timeString)
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
             }
         }
-        .foregroundStyle(.purple)
+        .foregroundStyle(PiDesignSystem.Color.tool)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(Color.purple.opacity(0.1), in: Capsule())
+        .piTintCapsule(PiDesignSystem.Color.tool, opacity: 0.1)
         .accessibilityLabel("正在执行 \(name) \(timeString)")
     }
     
@@ -343,37 +389,19 @@ struct AgentStatusHeader: View {
     }
     
     private func modelBadge(_ model: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "cpu")
-                .font(.system(size: 9))
-            Text(model)
-                .lineLimit(1)
-        }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.secondary.opacity(0.1), in: Capsule())
-        .accessibilityLabel("模型: \(model)")
+        compactBadge(icon: "cpu", text: model, color: PiDesignSystem.Color.secondary)
+            .accessibilityLabel("模型: \(model)")
     }
     
     private func sessionBadge(_ name: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "folder")
-                .font(.system(size: 9))
-            Text(name)
-                .lineLimit(1)
-        }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.secondary.opacity(0.1), in: Capsule())
-        .accessibilityLabel("会话: \(name)")
+        compactBadge(icon: "folder", text: name, color: PiDesignSystem.Color.secondary)
+            .accessibilityLabel("会话: \(name)")
     }
 
     // Transient model switch feedback pill (non-chat)
     private func modelSwitchPill(sel: ConversationStore.ModelSelectionResult) -> some View {
         let icon = sel.success ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle"
-        let color: Color = sel.success ? .blue : .red
+        let color: Color = sel.success ? PiDesignSystem.Color.accent : PiDesignSystem.Color.failed
         let text = sel.success ? "已切换: \(sel.modelId)" : "切换失败: \(sel.modelId)"
         return HStack(spacing: 4) {
             Image(systemName: icon)
@@ -384,7 +412,84 @@ struct AgentStatusHeader: View {
         .foregroundStyle(color)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(color.opacity(0.12), in: Capsule())
+        .piTintCapsule(color, opacity: 0.12)
+    }
+
+    private var relayValue: String {
+        switch store.connectionSnapshot.phase {
+        case .connected: return "已连接"
+        case .connecting: return "连接中"
+        case .reconnecting(let seconds): return "\(seconds)s"
+        case .error: return "错误"
+        case .disconnected: return "离线"
+        }
+    }
+    
+    private var agentValue: String {
+        if case .unknown = store.connectionSnapshot.agentReachability {
+            return store.isAgentOnline ? "在线" : "未知"
+        }
+        return store.connectionSnapshot.agentReachability.summaryText
+    }
+    
+    private var targetValue: String {
+        if let id = store.currentAgentId,
+           let agent = store.agents.first(where: { $0.agentId == id }) {
+            return agent.displayName
+        }
+        return "未选择"
+    }
+    
+    private func statusTile(title: String, value: String, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .medium))
+                Text(title)
+                    .font(PiDesignSystem.Font.caption2)
+            }
+            .foregroundStyle(color)
+            Text(value)
+                .font(PiDesignSystem.Font.captionBold)
+                .foregroundStyle(PiDesignSystem.Color.primary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+    
+    private func compactBadge(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(text)
+                .lineLimit(1)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .piTintCapsule(color, opacity: 0.1)
+    }
+    
+    private func infoRow(icon: String, text: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(color)
+                .frame(width: 14, alignment: .center)
+            Text(text)
+                .foregroundStyle(color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter
     }
 
     // MARK: - State Change
@@ -407,17 +512,17 @@ struct AgentStatusHeader: View {
     
     private var backgroundStyle: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(PiDesignSystem.Color.surface)
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+                    .stroke(PiDesignSystem.Color.border, lineWidth: 1)
             }
     }
     
     // MARK: - Accessibility
     
     private var accessibilitySummary: String {
-        var parts: [String] = [connectionLabel, statusText]
+        var parts: [String] = [connectionLabel, statusText, "Relay: \(relayValue)", "Agent: \(agentValue)", "Target: \(targetValue)"]
         if case let .usingTool(tool, _) = store.agentState {
             parts.append("工具: \(tool)")
         }
@@ -435,8 +540,8 @@ private struct AnimatedThinkingDots: View {
     
     var body: some View {
         Text(String(repeating: ".", count: dotCount % 3 + 1))
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.orange)
+            .font(PiDesignSystem.Font.captionBold)
+            .foregroundStyle(PiDesignSystem.Color.thinking)
             .onAppear {
                 withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: false)) {
                     // trigger state changes

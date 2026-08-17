@@ -20,9 +20,11 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+        NavigationStack {
+            ZStack {
+                PiDesignSystem.Color.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
                     projectHeader
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
@@ -32,6 +34,7 @@ struct DashboardView: View {
                         .padding(.top, 16)
 
                     Divider()
+                        .overlay(PiDesignSystem.Color.divider)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
 
@@ -47,10 +50,11 @@ struct DashboardView: View {
                         .padding(.top, 26)
                         .padding(.bottom, 24)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            .background(Color(.systemGroupedBackground))
             .navigationTitle("")
+            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -59,18 +63,21 @@ struct DashboardView: View {
 
     private var projectHeader: some View {
         HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(store.projectName)
-                    .font(.title2.weight(.bold))
+                    .font(PiDesignSystem.Font.title)
+                    .foregroundStyle(PiDesignSystem.Color.primary)
                     .lineLimit(1)
                 Text(store.sessionDisplayName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(PiDesignSystem.Font.body)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
             windowMenu
         }
+        .padding(16)
+        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("项目 \(store.projectName)，\(store.sessionDisplayName)")
     }
@@ -79,7 +86,7 @@ struct DashboardView: View {
     private var windowMenu: some View {
         Menu {
             if store.agents.isEmpty {
-                Text("无在线窗口").font(.caption).foregroundColor(.secondary)
+                Text("无在线窗口").font(PiDesignSystem.Font.caption).foregroundStyle(PiDesignSystem.Color.secondary)
             } else {
                 ForEach(store.agents) { agent in
                     Button {
@@ -96,9 +103,9 @@ struct DashboardView: View {
         } label: {
             Image(systemName: "macwindow")
                 .font(.system(size: 15))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
                 .frame(width: 30, height: 30)
-                .background(Color.gray.opacity(0.12), in: Circle())
+                .piCircleSurface()
         }
         .accessibilityLabel("切换窗口")
     }
@@ -106,7 +113,7 @@ struct DashboardView: View {
     // MARK: - ②③ Agent 状态与当前任务
 
     private var statusBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 Circle()
                     .fill(statusColor)
@@ -119,9 +126,9 @@ struct DashboardView: View {
                 Spacer(minLength: 4)
                 if store.isDashboardWorking {
                     if reduceMotion {
-                        Image(systemName: "circle.dotted").font(.subheadline).foregroundStyle(Color.orange)
+                        Image(systemName: "circle.dotted").font(.subheadline).foregroundStyle(PiDesignSystem.Color.thinking)
                     } else {
-                        ProgressView().scaleEffect(0.7).tint(.orange)
+                        ProgressView().scaleEffect(0.7).tint(PiDesignSystem.Color.thinking)
                     }
                 }
             }
@@ -129,7 +136,7 @@ struct DashboardView: View {
             if store.canContinue || store.isDashboardWorking {
                 Text(store.currentActionText)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
                     .lineLimit(2)
             }
 
@@ -141,17 +148,19 @@ struct DashboardView: View {
                     Text(store.modelDisplayName)
                         .font(.caption.weight(.medium))
                     if let usage = store.usageDisplayText {
-                        Text("·").foregroundStyle(.tertiary)
+                        Text("·").foregroundStyle(PiDesignSystem.Color.tertiary)
                         Text(usage)
                             .font(.caption.monospacedDigit())
                     }
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
                 .lineLimit(1)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("模型 \(store.modelDisplayName)，点击查看详情")
         }
+        .padding(16)
+        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
         .accessibilityElement(children: .combine)
     }
 
@@ -161,13 +170,13 @@ struct DashboardView: View {
 
     private var statusColor: Color {
         switch store.dashboardStatusLevel {
-        case .disconnected: return .red
-        case .offline:      return .orange
-        case .idle:         return .green
-        case .active:       return .orange
-        case .working:      return .green
-        case .completed:    return .green
-        case .failed:       return .red
+        case .disconnected: return PiDesignSystem.Color.failed
+        case .offline:      return PiDesignSystem.Color.pcOffline
+        case .idle:         return PiDesignSystem.Color.completed
+        case .active:       return PiDesignSystem.Color.thinking
+        case .working:      return PiDesignSystem.Color.completed
+        case .completed:    return PiDesignSystem.Color.completed
+        case .failed:       return PiDesignSystem.Color.failed
         }
     }
 
@@ -184,7 +193,7 @@ struct DashboardView: View {
                         viewModel.activeTab = 2
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(PiDesignSystem.Color.accent)
                 }
             }
 
@@ -205,6 +214,8 @@ struct DashboardView: View {
                 }
             }
         }
+        .padding(16)
+        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
         .accessibilityElement(children: .contain)
     }
 
@@ -220,7 +231,7 @@ struct DashboardView: View {
                     .lineLimit(1)
                 Text(change.path)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -243,9 +254,9 @@ struct DashboardView: View {
 
     private func changeTypeColor(_ type: FileChangeType) -> Color {
         switch type {
-        case .added: return .green
-        case .modified: return .orange
-        case .deleted: return .red
+        case .added: return PiDesignSystem.Color.diffAdd
+        case .modified: return PiDesignSystem.Color.thinking
+        case .deleted: return PiDesignSystem.Color.diffRemove
         }
     }
 
@@ -260,7 +271,7 @@ struct DashboardView: View {
     private func emptyHint(_ text: String) -> some View {
         Text(text)
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(PiDesignSystem.Color.secondary)
             .padding(.vertical, 8)
     }
 
@@ -284,7 +295,7 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
             .background(
-                store.canContinue ? Color.accentColor : Color.accentColor.opacity(0.7),
+                store.canContinue ? PiDesignSystem.Color.accent : PiDesignSystem.Color.accent.opacity(0.7),
                 in: Capsule()
             )
         }
@@ -306,7 +317,7 @@ struct DashboardView: View {
                     } label: {
                         Text("查看全部")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(PiDesignSystem.Color.accent)
                     }
                 }
             }
@@ -319,6 +330,8 @@ struct DashboardView: View {
                 }
             }
         }
+        .padding(16)
+        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
         .accessibilityElement(children: .contain)
     }
 
@@ -328,23 +341,23 @@ struct DashboardView: View {
                 .font(.caption)
                 .foregroundStyle(activityColor(event.type))
                 .frame(width: 24, height: 24)
-                .background(activityColor(event.type).opacity(0.12), in: Circle())
+                .piTintCircle(activityColor(event.type), opacity: 0.12)
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(event.type == .error ? Color.red : Color.primary)
+                    .foregroundStyle(event.type == .error ? PiDesignSystem.Color.failed : PiDesignSystem.Color.primary)
                     .lineLimit(1)
                 if let detail = event.detail, !detail.isEmpty {
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
             Text(event.timestamp, style: .time)
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(PiDesignSystem.Color.tertiary)
         }
         .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
@@ -364,12 +377,12 @@ struct DashboardView: View {
 
     private func activityColor(_ type: ActivityEventType) -> Color {
         switch type {
-        case .userRequest:   return .blue
-        case .thinking:      return .orange
-        case .toolExecution: return .purple
-        case .fileChange:    return .green
-        case .completed:     return .green
-        case .error:         return .red
+        case .userRequest:   return PiDesignSystem.Color.accent
+        case .thinking:      return PiDesignSystem.Color.thinking
+        case .toolExecution: return PiDesignSystem.Color.tool
+        case .fileChange:    return PiDesignSystem.Color.diffAdd
+        case .completed:     return PiDesignSystem.Color.completed
+        case .error:         return PiDesignSystem.Color.failed
         }
     }
 }

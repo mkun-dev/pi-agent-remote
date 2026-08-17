@@ -3,6 +3,7 @@ import Foundation
 /// 所有技术日志共用的敏感信息过滤器。
 enum SensitiveDataRedactor {
     private static let rules: [(NSRegularExpression, String)] = [
+        rule(#"(?i)(wss?://[^/@:\s"']+:)[^@\s"']+@"#, "$1••••@"),
         rule(#"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s\"']+"#, "$1••••"),
         rule(#"(?i)([?&](?:token|auth_token|access_token)=)[^&\s\"']+"#, "$1••••"),
         rule(#"(?i)(--(?:token|auth-token|access-token|api-key|password)\s+)[^\s\"']+"#, "$1••••"),

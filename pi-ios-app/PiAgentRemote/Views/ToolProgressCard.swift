@@ -147,18 +147,18 @@ struct ToolProgressCard: View {
                         .frame(width: 18, height: 18)
                     
                     Text(summaryTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.primary)
+                        .font(PiDesignSystem.Font.subheadline)
+                        .foregroundStyle(PiDesignSystem.Color.primary)
                         .multilineTextAlignment(.leading)
                     
                     Spacer(minLength: 8)
                     
                     Text(isExpanded ? "收起" : "查看过程")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(PiDesignSystem.Font.caption)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .font(PiDesignSystem.Font.captionBold)
+                        .foregroundStyle(PiDesignSystem.Color.secondary)
                 }
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -170,6 +170,7 @@ struct ToolProgressCard: View {
             
             if isExpanded {
                 Divider()
+                    .overlay(PiDesignSystem.Color.divider)
                     .padding(.horizontal, 12)
                 
                 VStack(alignment: .leading, spacing: 10) {
@@ -177,20 +178,20 @@ struct ToolProgressCard: View {
                         let visual = ToolPresentation.resolve(name: entry.toolName, input: entry.detail)
                         HStack(alignment: .top, spacing: 9) {
                             Image(systemName: visual.systemImage)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(PiDesignSystem.Font.caption)
+                                .foregroundStyle(PiDesignSystem.Color.secondary)
                                 .frame(width: 18, height: 18)
                                 .accessibilityHidden(true)
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(visual.displayName)
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(entry.status == .error ? .red : .primary)
+                                    .font(PiDesignSystem.Font.caption)
+                                    .foregroundStyle(entry.status == .error ? PiDesignSystem.Color.failed : PiDesignSystem.Color.primary)
                                 
                                 if !entry.detail.isEmpty {
                                     Text(entry.detail)
-                                        .font(.caption2.monospaced())
-                                        .foregroundColor(.secondary)
+                                        .font(PiDesignSystem.Font.monoDigit)
+                                        .foregroundStyle(PiDesignSystem.Color.secondary)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                 }
@@ -214,8 +215,8 @@ struct ToolProgressCard: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else if !categorySummary.isEmpty {
                 Text(categorySummary)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(PiDesignSystem.Font.caption)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 9)
                     .transition(.opacity)

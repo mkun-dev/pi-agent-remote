@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var settings = SettingsStore()
+    @StateObject private var settings: SettingsStore
     @StateObject private var viewModel: ChatViewModel
     /// 直接引用唯一业务状态源（conversationStore 为 let，需通过 ObservedObject 生成 Binding）
     @ObservedObject private var store: ConversationStore
@@ -16,32 +16,38 @@ struct ContentView: View {
     }
     
     var body: some View {
-        TabView(selection: $viewModel.activeTab) {
+        ZStack {
+            PiDesignSystem.Color.background
+                .ignoresSafeArea()
+            TabView(selection: $viewModel.activeTab) {
             // 首页（Dashboard）：Agent 状态 + 最近进展 + 快速继续
             DashboardView(viewModel: viewModel)
             .tabItem { Label("首页", systemImage: "house") }
             .tag(0)
             
-            NavigationView {
+            NavigationStack {
                 ChatView(viewModel: viewModel)
             }
             .tabItem { Label("聊天", systemImage: "message.fill") }
             .tag(1)
             
-            NavigationView {
+            NavigationStack {
                 WorkspaceExplorerView(viewModel: viewModel)
             }
             .tabItem { Label("文件", systemImage: "folder") }
             .tag(2)
             
-            NavigationView {
+            NavigationStack {
                 SettingsView()
                     .environmentObject(settings)
                     .environmentObject(viewModel)
             }
             .tabItem { Label("设置", systemImage: "gear") }
             .tag(3)
+            }
         }
+        .tint(PiDesignSystem.Color.accent)
+        .preferredColorScheme(.dark)
         .environmentObject(settings)
         .environmentObject(viewModel)
         // 问卷弹窗提升到 TabView 层级：任何 Tab 下 Pi 提问都能直接弹出

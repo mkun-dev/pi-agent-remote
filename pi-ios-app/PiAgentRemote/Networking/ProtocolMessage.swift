@@ -89,9 +89,16 @@ struct ProtocolMessage: Codable {
         
         // Streaming 同步 — assistant.delta 序号
         let seq: Int?
+
+        // P4 git 式撤回
+        let userMessageIndexFromEnd: Int?
+        let removedMessageCount: Int?
         
         // Workspace 联动 — agent.input 附带的文件上下文（路径，不复制内容）
         let context: MessageContext?
+        
+        // Steer（P3）：agent.input 携带 steer=true 表示中断当前 turn 并作为新 turn 发送
+        let steer: Bool?
         
         /// 便捷 init：只传常用字段，其余默认为 nil（避免每次加字段改所有调用处）
         init(
@@ -119,7 +126,9 @@ struct ProtocolMessage: Codable {
             fileType: String? = nil, mimeType: String? = nil,
             query: String? = nil, hits: [WorkspaceHitPayload]? = nil,
             seq: Int? = nil,
-            context: MessageContext? = nil
+            userMessageIndexFromEnd: Int? = nil, removedMessageCount: Int? = nil,
+            context: MessageContext? = nil,
+            steer: Bool? = nil
         ) {
             self.text = text; self.status = status; self.description = description
             self.tool = tool; self.command = command; self.data = data; self.success = success
@@ -143,7 +152,9 @@ struct ProtocolMessage: Codable {
             self.fileType = fileType; self.mimeType = mimeType
             self.query = query; self.hits = hits
             self.seq = seq
+            self.userMessageIndexFromEnd = userMessageIndexFromEnd; self.removedMessageCount = removedMessageCount
             self.context = context
+            self.steer = steer
         }
     }
     

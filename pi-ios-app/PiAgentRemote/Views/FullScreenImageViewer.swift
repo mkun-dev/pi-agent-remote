@@ -14,7 +14,7 @@ struct FullScreenImageViewer: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.black.ignoresSafeArea()
+                PiDesignSystem.Color.background.ignoresSafeArea()
                 ZoomableImageView(image: item.image, reduceMotion: reduceMotion)
                     .ignoresSafeArea()
                 
@@ -25,29 +25,29 @@ struct FullScreenImageViewer: View {
                         .padding(.bottom, 10)
                         .background(
                             LinearGradient(
-                                colors: [Color.black.opacity(0.72), Color.black.opacity(0)],
+                                colors: [PiDesignSystem.Color.background.opacity(0.9), PiDesignSystem.Color.background.opacity(0)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                     Spacer()
                     Text("双指缩放 · 双击放大")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.78))
+                        .font(PiDesignSystem.Font.caption)
+                        .foregroundStyle(PiDesignSystem.Color.primary.opacity(0.78))
                         .padding(.horizontal, 12)
                         .frame(minHeight: 44)
-                        .background(.black.opacity(0.42), in: Capsule())
+                        .piCapsuleSurface(tint: PiDesignSystem.Color.panelElevated.opacity(0.72))
                         .padding(.bottom, geometry.safeAreaInsets.bottom + 12)
                         .accessibilityHidden(true)
                 }
                 
                 if didSave {
                     Label("已保存到相册", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
+                        .font(PiDesignSystem.Font.subheadline)
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 44)
-                        .background(Color.green.opacity(0.88), in: Capsule())
+                        .piTintCapsule(PiDesignSystem.Color.completed, opacity: 0.88)
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
                         .accessibilityLabel("图片已保存到相册")
                 }
@@ -76,8 +76,8 @@ struct FullScreenImageViewer: View {
             }
             
             Text(item.fileName)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Color.white)
+                .font(PiDesignSystem.Font.subheadline)
+                .foregroundStyle(PiDesignSystem.Color.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             
@@ -100,9 +100,9 @@ struct FullScreenImageViewer: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(PiDesignSystem.Color.primary)
                 .frame(width: 44, height: 44)
-                .background(Color.black.opacity(0.48), in: Circle())
+                .piFilledCircle(PiDesignSystem.Color.panelElevated.opacity(0.88))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

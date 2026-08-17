@@ -57,12 +57,7 @@ struct CodeBlockView: View {
                 expandButton
             }
         }
-        .background(PiDesignSystem.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: PiDesignSystem.Radius.lg, style: .continuous)
-                .stroke(PiDesignSystem.Color.border, lineWidth: 1)
-        }
+        .piCard(color: PiDesignSystem.Color.surface, radius: PiDesignSystem.Radius.lg)
     }
     
     private var header: some View {
@@ -76,22 +71,22 @@ struct CodeBlockView: View {
                         .lineLimit(1)
                 }
                 .font(.caption.weight(.medium).monospaced())
-                .foregroundStyle(.indigo)
+                .foregroundStyle(PiDesignSystem.Color.accent)
             } else {
                 Text(profile.displayName)
                     .font(.caption.weight(.semibold).monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PiDesignSystem.Color.secondary)
             }
             if !lines.isEmpty {
                 Text("\(lines.count) 行")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .font(PiDesignSystem.Font.monoDigit)
+                    .foregroundStyle(PiDesignSystem.Color.tertiary)
             }
             Spacer(minLength: 8)
             Button(action: copyCode) {
                 Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                    .font(PiDesignSystem.Font.caption)
+                    .foregroundStyle(copied ? PiDesignSystem.Color.completed : PiDesignSystem.Color.accent)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -101,8 +96,8 @@ struct CodeBlockView: View {
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .overlay(alignment: .bottom) { Divider() }
+        .background(PiDesignSystem.Color.panelElevated)
+        .overlay(alignment: .bottom) { Divider().overlay(PiDesignSystem.Color.divider) }
     }
     
     private var codeBody: some View {
@@ -127,14 +122,14 @@ struct CodeBlockView: View {
                 isExpanded ? "收起代码" : "查看完整代码（\(lines.count) 行）",
                 systemImage: isExpanded ? "chevron.up" : "chevron.down"
             )
-            .font(.caption.weight(.semibold))
+            .font(PiDesignSystem.Font.captionBold)
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Color.accentColor)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .overlay(alignment: .top) { Divider() }
+        .foregroundStyle(PiDesignSystem.Color.accent)
+        .background(PiDesignSystem.Color.panelElevated)
+        .overlay(alignment: .top) { Divider().overlay(PiDesignSystem.Color.divider) }
         .accessibilityValue(isExpanded ? "已展开" : "已折叠")
     }
     
@@ -316,7 +311,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
             while end < code.endIndex, code[end] != "\n" {
                 end = code.index(after: end)
             }
-            append(String(code[index..<end]), color: .blue)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.accent)
             index = end
             continue
         }
@@ -327,7 +322,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
             while end < code.endIndex, code[end] != "\n" {
                 end = code.index(after: end)
             }
-            append(String(code[index..<end]), color: .secondary)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.secondary)
             index = end
             continue
         }
@@ -336,7 +331,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
         if let block = profile.blockComment, code[index...].hasPrefix(block.start) {
             let contentStart = code.index(index, offsetBy: block.start.count)
             let end = code.range(of: block.end, range: contentStart..<code.endIndex)?.upperBound ?? code.endIndex
-            append(String(code[index..<end]), color: .secondary)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.secondary)
             index = end
             continue
         }
@@ -356,7 +351,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
                 }
                 end = code.index(after: end)
             }
-            append(String(code[index..<end]), color: .green)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.diffAdd)
             index = end
             continue
         }
@@ -375,7 +370,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
                     end = code.index(after: end)
                 }
             }
-            append(String(code[index..<end]), color: .cyan)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.streaming)
             index = end
             continue
         }
@@ -387,7 +382,7 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
                 end = code.index(after: end)
             }
             let word = String(code[index..<end])
-            append(word, color: profile.keywords.contains(word) ? .purple : .primary)
+            append(word, color: profile.keywords.contains(word) ? PiDesignSystem.Color.tool : PiDesignSystem.Color.primary)
             index = end
             continue
         }
@@ -400,12 +395,12 @@ private func highlightCodeRaw(_ code: String, profile: CodeLanguageProfile) -> A
                   String(code[end]).unicodeScalars.allSatisfy({ numericCharacters.contains($0) }) {
                 end = code.index(after: end)
             }
-            append(String(code[index..<end]), color: .orange)
+            append(String(code[index..<end]), color: PiDesignSystem.Color.thinking)
             index = end
             continue
         }
         
-        append(String(character), color: .primary)
+        append(String(character), color: PiDesignSystem.Color.primary)
         index = code.index(after: index)
     }
     

@@ -29,8 +29,8 @@ class SettingsStore: ObservableObject {
     }
     
     init() {
-        // 默认连接中继服务器（公网 NAT 穿透）；token 首次填写后持久化
-        let savedHost = UserDefaults.standard.string(forKey: "pi_host") ?? "82.156.158.106"
+        // 默认不内置任何服务器地址（避免泄露个人主机）；用户需在设置页填写自己的地址
+        let savedHost = UserDefaults.standard.string(forKey: "pi_host") ?? ""
         let savedPort = UserDefaults.standard.integer(forKey: "pi_port")
         self.host = savedHost
         self.port = savedPort > 0 ? savedPort : 3002

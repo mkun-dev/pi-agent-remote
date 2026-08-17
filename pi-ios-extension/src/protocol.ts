@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ProtocolMessage, ClientToServer, ServerToClient, EventType, SessionInfo, HistoryEntry, SessionListItem, UsageInfo, WorkspaceNode, WorkspaceFileContent } from "./types.js";
 
 export type EventScope = {
@@ -5,6 +6,14 @@ export type EventScope = {
   sessionId?: string | null;
   sessionFile?: string | null;
 };
+
+/**
+ * 生成时间戳 + 随机后缀的 id，防止同一毫秒多条事件 id 碰撞导致 iOS 端去重丢消息。
+ * thinking 增量、tool.output、agent.output 等高频工厂都依赖它。
+ */
+function uid(): string {
+  return `${Date.now()}_${randomUUID().slice(0, 8)}`;
+}
 
 export function withScope<T extends ProtocolMessage>(message: T, scope?: EventScope): T {
   if (!scope) return message;
@@ -22,7 +31,7 @@ export function withScope<T extends ProtocolMessage>(message: T, scope?: EventSc
 export class ProtocolHandler {
   static createInput(text: string): ProtocolMessage {
     return {
-      id: `input_${Date.now()}`,
+      id: `input_${uid()}`,
       type: "agent.input",
       timestamp: Date.now(),
       payload: { text }
@@ -31,7 +40,7 @@ export class ProtocolHandler {
 
   static createAgentOutput(text: string, type: "message" | "thinking" = "message"): ProtocolMessage {
     return {
-      id: `output_${Date.now()}`,
+      id: `output_${uid()}`,
       type: "agent.output",
       timestamp: Date.now(),
       payload: { text, type }
@@ -49,7 +58,7 @@ export class ProtocolHandler {
 
   static createAssistantDelta(messageId: string, text: string, seq?: number): ProtocolMessage {
     return {
-      id: `assistant_delta_${messageId}_${seq ?? Date.now()}`,
+      id: `assistant_delta_${messageId}_${seq ?? uid()}`,
       type: "assistant.delta",
       timestamp: Date.now(),
       payload: { messageId, text, seq }
@@ -67,7 +76,7 @@ export class ProtocolHandler {
 
   static createToolStart(tool: string, command: string, toolCallId?: string): ProtocolMessage {
     return {
-      id: `tool_start_${Date.now()}`,
+      id: `tool_start_${uid()}`,
       type: "tool.start",
       timestamp: Date.now(),
       payload: { tool, command, toolCallId }
@@ -76,7 +85,7 @@ export class ProtocolHandler {
 
   static createToolOutput(data: string): ProtocolMessage {
     return {
-      id: `tool_output_${Date.now()}`,
+      id: `tool_output_${uid()}`,
       type: "tool.output",
       timestamp: Date.now(),
       payload: { data }
@@ -85,7 +94,7 @@ export class ProtocolHandler {
 
   static createToolEnd(success: boolean, toolCallId?: string): ProtocolMessage {
     return {
-      id: `tool_end_${Date.now()}`,
+      id: `tool_end_${uid()}`,
       type: "tool.end",
       timestamp: Date.now(),
       payload: { success, toolCallId }
@@ -97,7 +106,7 @@ export class ProtocolHandler {
     details?: { tool?: string; description?: string }
   ): ProtocolMessage {
     return {
-      id: `status_${Date.now()}`,
+      id: `status_${uid()}`,
       type: "agent.status",
       timestamp: Date.now(),
       payload: { status, ...details }
@@ -110,7 +119,7 @@ export class ProtocolHandler {
     stats?: { additions?: number; deletions?: number }
   ): ProtocolMessage {
     return {
-      id: `file_${Date.now()}`,
+      id: `file_${uid()}`,
       type: "file.change",
       timestamp: Date.now(),
       payload: { path, action, ...stats }
@@ -119,7 +128,7 @@ export class ProtocolHandler {
 
   static createSessionInfo(info: SessionInfo): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.info",
       timestamp: Date.now(),
       payload: { ...info }
@@ -128,7 +137,7 @@ export class ProtocolHandler {
 
   static createSessionUpdate(reason: string, info: SessionInfo): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.update",
       timestamp: Date.now(),
       payload: { ...info, reason }
@@ -137,7 +146,7 @@ export class ProtocolHandler {
 
   static createSessionResume(sessionId?: string): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.resume",
       timestamp: Date.now(),
       payload: { sessionId }
@@ -146,7 +155,7 @@ export class ProtocolHandler {
 
   static createSessionHistory(entries: HistoryEntry[], sessionId?: string | null): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.history",
       timestamp: Date.now(),
       payload: { sessionId: sessionId ?? null, entries }
@@ -155,7 +164,7 @@ export class ProtocolHandler {
 
   static createSessionListResult(items: SessionListItem[]): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.list_result",
       timestamp: Date.now(),
       payload: { sessions: items }
@@ -164,7 +173,7 @@ export class ProtocolHandler {
 
   static createSessionSwitchAck(path: string, ok: boolean): ProtocolMessage {
     return {
-      id: `session_${Date.now()}`,
+      id: `session_${uid()}`,
       type: "session.switch_ack",
       timestamp: Date.now(),
       payload: { sessionFile: path, ok }
@@ -173,7 +182,7 @@ export class ProtocolHandler {
 
   static createUsageInfo(info: UsageInfo, generation?: number): ProtocolMessage {
     return {
-      id: `usage_${Date.now()}`,
+      id: `usage_${uid()}`,
       type: "usage.info",
       timestamp: Date.now(),
       payload: { ...info, ...(generation !== undefined ? { generation } : {}) }
@@ -182,7 +191,7 @@ export class ProtocolHandler {
 
   static createModelList(models: string[], generation?: number): ProtocolMessage {
     return {
-      id: `model_${Date.now()}`,
+      id: `model_${uid()}`,
       type: "model.list",
       timestamp: Date.now(),
       payload: { models, ...(generation !== undefined ? { generation } : {}) }
@@ -191,7 +200,7 @@ export class ProtocolHandler {
 
   static createModelSelectAck(modelId: string, ok: boolean, message?: string, selectionRequestId?: string): ProtocolMessage {
     return {
-      id: `model_${Date.now()}`,
+      id: `model_${uid()}`,
       type: "model.select_ack",
       timestamp: Date.now(),
       payload: {
@@ -205,7 +214,7 @@ export class ProtocolHandler {
 
   static createQuestionnaireShow(questions: any[]): ProtocolMessage {
     return {
-      id: `q_${Date.now()}`,
+      id: `q_${uid()}`,
       type: "questionnaire.show",
       timestamp: Date.now(),
       payload: { questions }
@@ -214,7 +223,7 @@ export class ProtocolHandler {
 
   static createMediaImage(fileName: string, base64: string): ProtocolMessage {
     return {
-      id: `img_${Date.now()}`,
+      id: `img_${uid()}`,
       type: "media.image",
       timestamp: Date.now(),
       payload: { fileName, base64 }
@@ -223,7 +232,7 @@ export class ProtocolHandler {
 
   static createWorkspaceTree(path: string, name: string, children: WorkspaceNode[]): ProtocolMessage {
     return {
-      id: `ws_tree_${Date.now()}`,
+      id: `ws_tree_${uid()}`,
       type: "workspace.tree",
       timestamp: Date.now(),
       payload: { path, name, children }
@@ -232,7 +241,7 @@ export class ProtocolHandler {
 
   static createWorkspaceFile(file: WorkspaceFileContent): ProtocolMessage {
     return {
-      id: `ws_file_${Date.now()}`,
+      id: `ws_file_${uid()}`,
       type: "workspace.file",
       timestamp: Date.now(),
       payload: { ...file }
@@ -241,7 +250,7 @@ export class ProtocolHandler {
 
   static createWorkspaceError(path: string | undefined, message: string): ProtocolMessage {
     return {
-      id: `ws_err_${Date.now()}`,
+      id: `ws_err_${uid()}`,
       type: "workspace.error",
       timestamp: Date.now(),
       payload: { path, message }
@@ -250,10 +259,24 @@ export class ProtocolHandler {
 
   static createWorkspaceSearchResult(query: string, hits: { path: string; filename: string; type: "file" | "directory" }[]): ProtocolMessage {
     return {
-      id: `ws_search_${Date.now()}`,
+      id: `ws_search_${uid()}`,
       type: "workspace.searchResult",
       timestamp: Date.now(),
       payload: { query, hits }
+    };
+  }
+
+  /**
+   * P4 git 式撤回：通知 iOS 已把 leaf 移到目标用户消息之前。
+   * rewoundContent 是被撤回的那条用户消息原文（供 iOS 回填输入框）；
+   * removedMessageCount 是从本地应删除的用户消息条数（含目标及之后）。
+   */
+  static createHistoryRewound(rewoundContent: string, removedMessageCount: number): ProtocolMessage {
+    return {
+      id: `rewind_${uid()}`,
+      type: "history.rewound",
+      timestamp: Date.now(),
+      payload: { text: rewoundContent, removedMessageCount }
     };
   }
 }

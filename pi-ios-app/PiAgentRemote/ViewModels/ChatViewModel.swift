@@ -51,6 +51,16 @@ class ChatViewModel: ObservableObject {
                 self?.showModelPicker = false
             }
             .store(in: &cancellables)
+
+        // P4：收到 history.rewound 后，把被撤回的原消息文本回填到输入框。
+        conversationStore.$pendingRewoundDraft
+            .receive(on: DispatchQueue.main)
+            .compactMap { $0 }
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.inputText = self.conversationStore.consumePendingRewoundDraft() ?? ""
+            }
+            .store(in: &cancellables)
         
         ws.onSessionSwitchAck = { [weak self] sessionFile, ok in
             guard let self = self else { return }
@@ -78,8 +88,8 @@ class ChatViewModel: ObservableObject {
         }
         
         // 连接/断开状态同步到 ConversationStore（唯一业务状态源）
-        ws.onConnectionStateChanged = { [weak self] connected, status in
-            self?.conversationStore.updateConnectionState(connected: connected, status: status)
+        ws.onConnectionStateChanged = { [weak self] snapshot in
+            self?.conversationStore.updateConnectionState(snapshot)
         }
         
         ws.onRemoteEvent = { [weak self] event in
@@ -336,7 +346,7 @@ class ChatViewModel: ObservableObject {
         ws.updateConnection(host: host, port: port, token: token)
     }
     
-    func send() {
+    func send(steer: Bool = false) {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         inputText = ""
@@ -362,12 +372,61 @@ class ChatViewModel: ObservableObject {
         conversationStore.recordLocalUserMessage(userMsg)
         // 附带待发送的文件上下文（来自 Workspace "询问Agent"），发送后清除
         let ctx = conversationStore.consumePendingFileContext()
-        ws.send(text, id: userMsg.id, context: ctx)
+        ws.send(text, id: userMsg.id, context: ctx, steer: steer)
         
         guard needsAck else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             self?.conversationStore.updateMessageDelivery(id: userMsg.id, delivery: .failed)
         }
+    }
+
+    /// P3：停止当前 Agent turn（发 /stop，扩展端中断 + 清队列）。仅在 Agent 忙时可用。
+    func stop() {
+        let connected = conversationStore.isConnected && conversationStore.isAgentOnline
+        guard connected else { return }
+        ws.send("/stop", id: UUID().uuidString)
+        conversationStore.appendSystemMessage(Message(
+            id: UUID().uuidString, sender: .system,
+            content: "⏹ 已请求停止当前任务",
+            timestamp: Date(), kind: .status
+        ))
+    }
+
+    /// P4：git 式撤回到指定用户消息之前（目标及其后消息从上下文消失）。
+    /// 参数 messageID 必须对应 messages 中某条用户文本消息。
+    func rewindToUserMessage(messageID: String) {
+        let connected = conversationStore.isConnected && conversationStore.isAgentOnline
+        guard connected else {
+            conversationStore.appendSystemMessage(Message(
+                id: UUID().uuidString, sender: .system,
+                content: "未连接，无法撤回。请先连接。",
+                timestamp: Date(), kind: .status
+            ))
+            return
+        }
+        guard !conversationStore.agentState.isWorking else {
+            conversationStore.appendSystemMessage(Message(
+                id: UUID().uuidString, sender: .system,
+                content: "⏳ Agent 处理中，无法撤回，请等它空闲后再试。",
+                timestamp: Date(), kind: .status
+            ))
+            return
+        }
+        // 只统计“已送达的文本用户消息”，与 UI 里真正显示编辑按钮的集合保持一致。
+        // 这样 failed/sending 的本地临时消息不会参与 rewind 计数，避免与扩展端 session branch 错位。
+        let userMessages = conversationStore.messages.filter {
+            $0.sender == .user && $0.kind == .text && $0.delivery == .sent
+        }
+        guard let index = userMessages.firstIndex(where: { $0.id == messageID }) else {
+            conversationStore.appendSystemMessage(Message(
+                id: UUID().uuidString, sender: .system,
+                content: "❌ 未找到要撤回的用户消息。",
+                timestamp: Date(), kind: .status
+            ))
+            return
+        }
+        let nFromEnd = userMessages.count - index
+        ws.requestRewind(userMessageIndexFromEnd: nFromEnd)
     }
     
     func uploadMedia(images: [PreparedImageUpload], caption: String) {

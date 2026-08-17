@@ -25,8 +25,8 @@ class WebSocketManager: ObservableObject {
     private let clientId: String
     var onDeliveryResult: ((String, Bool) -> Void)?
     var onConnected: (() -> Void)?
-    /// 连接状态变更回调（connected: 是否已连接, status: 描述），供上层同步 ConversationStore。
-    var onConnectionStateChanged: ((Bool, String) -> Void)?
+    /// 结构化连接状态回调，供上层同步 ConversationStore。
+    var onConnectionStateChanged: ((ConnectionStatusSnapshot) -> Void)?
     var onRemoteEvent: ((RemoteEvent) -> Void)?
     /// 目标窗口离线回调（relay.error code=agent_offline）：供上层主动 fallback，不等 relay.agents（N1）。
     var onTargetAgentOffline: (() -> Void)?
@@ -37,9 +37,10 @@ class WebSocketManager: ObservableObject {
     private var reconnectTimer: Timer?
     private var reconnectDelay: TimeInterval = 3
     private var shouldAutoReconnect = false  // 仅手动连接后为 true
+    private var connectionSnapshot = ConnectionStatusSnapshot()
     
     init(
-        host: String = "82.156.158.106",
+        host: String = "",
         port: Int = 3002,
         token: String = "",
         clientId: String = UUID().uuidString.lowercased()
@@ -100,6 +101,14 @@ class WebSocketManager: ObservableObject {
         isConnected = false
         // 手动连接重置退避延迟，避免上次累积的 30s 等待影响本次体验
         reconnectDelay = 3
+        updateConnectionSnapshot(
+            phase: .connecting,
+            summary: "连接中",
+            detail: endpointURL.absoluteString,
+            lastError: "",
+            relayConnected: false,
+            isAutoReconnectEnabled: true
+        )
         RemoteLogger.ws("连接中 → \(endpointURL.host ?? "?"):\(endpointURL.port ?? 0)")
         
         var request = URLRequest(url: connectURL)
@@ -202,6 +211,15 @@ class WebSocketManager: ObservableObject {
             if let id = proto.payload.id {
                 onDeliveryResult?(id, ok)
             }
+            if proto.type == "relay.error" {
+                let code = proto.payload.code
+                updateConnectionSnapshot(
+                    phase: connectionSnapshot.phase,
+                    summary: relayErrorSummary(code: code),
+                    detail: relayErrorDetail(code: code),
+                    lastError: relayErrorDetail(code: code)
+                )
+            }
             // 目标窗口离线：主动清空 Transport 目标并通知上层即时 fallback（N1）
             if proto.type == "relay.error", proto.payload.code == "agent_offline" {
                 RemoteLogger.ws("[WS] target agent offline, fallback")
@@ -219,10 +237,20 @@ class WebSocketManager: ObservableObject {
 
     /// 断开（手动模式：不自动重连），显示断开原因帮助诊断
     private func onDisconnect(reason: String = "") {
-        status = reason.isEmpty ? "已断开" : "已断开 (\(reason))"
+        let normalizedReason = normalizeDisconnectReason(reason)
+        status = normalizedReason.isEmpty ? "已断开" : "已断开 (\(normalizedReason))"
         isConnected = false
-        RemoteLogger.ws("已断开: \(reason)")
-        onConnectionStateChanged?(false, status)
+        RemoteLogger.ws("已断开: \(normalizedReason)")
+        updateConnectionSnapshot(
+            phase: shouldAutoReconnect ? .reconnecting(retryInSeconds: Int(reconnectDelay.rounded())) : (normalizedReason.isEmpty ? .disconnected : .error),
+            summary: shouldAutoReconnect ? "等待重连" : (normalizedReason.isEmpty ? "已断开" : friendlyDisconnectSummary(reason: normalizedReason)),
+            detail: normalizedReason.isEmpty ? nil : normalizedReason,
+            lastDisconnectReason: normalizedReason.isEmpty ? nil : normalizedReason,
+            lastError: normalizedReason.isEmpty ? connectionSnapshot.lastError : normalizedReason,
+            relayConnected: false,
+            isAutoReconnectEnabled: shouldAutoReconnect,
+            lastDisconnectedAt: Date()
+        )
         onAgentStateEvent?(.disconnected)
         socket = nil  // 释放旧 socket，让后续重连能创建新连接
         session = .empty
@@ -235,13 +263,24 @@ class WebSocketManager: ObservableObject {
         cancelReconnect()
         let delay = reconnectDelay
         status = "已断开，\(Int(delay))s 后重连..."
-        // 反馈重连状态到 UI，让用户知道正在自动恢复
-        onConnectionStateChanged?(false, status)
+        updateConnectionSnapshot(
+            phase: .reconnecting(retryInSeconds: Int(delay)),
+            summary: "\(Int(delay))s 后重连",
+            detail: connectionSnapshot.lastDisconnectReason,
+            relayConnected: false,
+            isAutoReconnectEnabled: true
+        )
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             guard let self, self.reconnectTimer != nil else { return }  // 已被 cancelReconnect 取消
             RemoteLogger.ws("重连中...")
             self.status = "正在重连..."
-            self.onConnectionStateChanged?(false, "正在重连...")
+            self.updateConnectionSnapshot(
+                phase: .connecting,
+                summary: "正在重连",
+                detail: self.endpointURL.absoluteString,
+                relayConnected: false,
+                isAutoReconnectEnabled: true
+            )
             self.connect()
         }
         // 指数退避: 3 → 5 → 10 → 20 → 30（最大 30s）
@@ -253,7 +292,145 @@ class WebSocketManager: ObservableObject {
         reconnectTimer = nil
     }
     
-    func send(_ text: String, id: String = UUID().uuidString, context: MessageContext? = nil) {
+    private func updateConnectionSnapshot(
+        phase: ConnectionPhase? = nil,
+        summary: String? = nil,
+        detail: String? = nil,
+        lastError: String? = nil,
+        lastDisconnectReason: String? = nil,
+        relayConnected: Bool? = nil,
+        isAutoReconnectEnabled: Bool? = nil,
+        lastConnectedAt: Date? = nil,
+        lastDisconnectedAt: Date? = nil
+    ) {
+        if let phase { connectionSnapshot.phase = phase }
+        if let summary { connectionSnapshot.summary = summary }
+        if let detail { connectionSnapshot.detail = detail }
+        if let lastError { connectionSnapshot.lastError = lastError }
+        if let lastDisconnectReason { connectionSnapshot.lastDisconnectReason = lastDisconnectReason }
+        if let relayConnected { connectionSnapshot.relayConnected = relayConnected }
+        if let isAutoReconnectEnabled { connectionSnapshot.isAutoReconnectEnabled = isAutoReconnectEnabled }
+        if let lastConnectedAt { connectionSnapshot.lastConnectedAt = lastConnectedAt }
+        if let lastDisconnectedAt { connectionSnapshot.lastDisconnectedAt = lastDisconnectedAt }
+        onConnectionStateChanged?(connectionSnapshot)
+    }
+    
+    private func normalizeDisconnectReason(_ reason: String) -> String {
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let lowered = trimmed.lowercased()
+        if lowered == "the operation couldn’t be completed. software caused connection abort" ||
+            lowered == "the operation couldn't be completed. software caused connection abort" {
+            return "本地网络连接中断"
+        }
+        if lowered.contains("timed out") || lowered.contains("超时") {
+            return "连接超时"
+        }
+        if lowered.contains("network is unreachable") || lowered.contains("not connected to internet") {
+            return "网络不可达"
+        }
+        if lowered.contains("connection refused") {
+            return "目标服务器拒绝连接"
+        }
+        if lowered.contains("host not found") || lowered.contains("name or service not known") {
+            return "找不到服务器地址"
+        }
+        return trimmed
+    }
+    
+    private func friendlyDisconnectSummary(reason: String) -> String {
+        let lowered = reason.lowercased()
+        if lowered.contains("authentication failed") || lowered.contains("4001") {
+            return "认证失败"
+        }
+        if lowered.contains("client not allowed") || lowered.contains("invalid client id") || lowered.contains("4003") {
+            return "设备未授权"
+        }
+        if lowered.contains("another client is connected") || lowered.contains("4004") {
+            return "另一台设备已在线"
+        }
+        if lowered.contains("rate limit") || lowered.contains("4008") {
+            return "请求过快"
+        }
+        if lowered.contains("agent reconnected") || lowered.contains("client reconnected") || lowered.contains("4000") {
+            return "连接已切换"
+        }
+        if lowered.contains("连接超时") || lowered.contains("timed out") {
+            return "连接超时"
+        }
+        if lowered.contains("网络不可达") {
+            return "网络不可达"
+        }
+        if lowered.contains("拒绝连接") {
+            return "服务器拒绝连接"
+        }
+        if lowered.contains("找不到服务器地址") {
+            return "地址错误"
+        }
+        if lowered.contains("中断") || lowered.contains("aborted") {
+            return "连接中断"
+        }
+        return "已断开"
+    }
+    
+    private func relayErrorSummary(code: String?) -> String {
+        switch code {
+        case "agent_offline": return "当前窗口离线"
+        case "ambiguous_target": return "目标窗口不明确"
+        default: return connectionSnapshot.summary
+        }
+    }
+    
+    private func relayErrorDetail(code: String?) -> String {
+        switch code {
+        case "agent_offline": return "当前目标窗口已离线，已等待切换"
+        case "ambiguous_target": return "存在多个窗口，请先选择目标窗口"
+        case "authentication_failed": return "Token 无效或已过期"
+        case "client_not_allowed": return "当前设备未被服务器授权"
+        case "rate_limit_exceeded": return "请求发送过快，请稍后再试"
+        case let value?: return value
+        default: return ""
+        }
+    }
+    
+    private func disconnectReason(reason: String, code: UInt16) -> String {
+        if !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return reason
+        }
+        switch code {
+        case 4000: return "连接已被新会话替换"
+        case 4001: return "authentication failed"
+        case 4003: return "client not allowed"
+        case 4004: return "another client is connected"
+        case 4008: return "rate limit exceeded"
+        case 1000: return "正常关闭"
+        case 1001: return "远端已离开"
+        case 1006: return "网络连接异常中断"
+        default: return "code \(code)"
+        }
+    }
+    
+    private func normalizeTransportError(_ error: Error?) -> String {
+        guard let error else { return "网络错误" }
+        let nsError = error as NSError
+        let message = nsError.localizedDescription
+        let lowered = message.lowercased()
+        if lowered.contains("timed out") {
+            return "连接超时"
+        }
+        if lowered.contains("offline") || lowered.contains("internet") {
+            return "当前网络不可用"
+        }
+        if lowered.contains("refused") {
+            return "目标服务器拒绝连接"
+        }
+        if lowered.contains("host") && lowered.contains("not found") {
+            return "找不到服务器地址"
+        }
+        return message
+    }
+    
+    func send(_ text: String, id: String = UUID().uuidString, context: MessageContext? = nil, steer: Bool = false) {
         let p = ProtocolMessage(
             id: id,
             type: "agent.input",
@@ -269,7 +446,8 @@ class WebSocketManager: ObservableObject {
                 agentId: nil,
                 sessions: nil, ok: nil,
                 id: nil,
-                context: context
+                context: context,
+                steer: steer ? true : nil
             )
         )
         guard let data = try? JSONEncoder().encode(p),
@@ -446,6 +624,23 @@ class WebSocketManager: ObservableObject {
         socket?.write(string: json)
     }
 
+    /// P4：git 式撤回到“倒数第 N 条用户消息”之前。扩展端会 branch 到目标之前，
+    /// 随后重发新的 session.history，并额外发 history.rewound 回填输入框。
+    func requestRewind(userMessageIndexFromEnd: Int) {
+        let p = ProtocolMessage(
+            id: UUID().uuidString,
+            type: "message.rewind",
+            timestamp: Int(Date().timeIntervalSince1970 * 1000),
+            payload: ProtocolMessage.Payload(
+                targetAgentId: currentAgentId,
+                userMessageIndexFromEnd: userMessageIndexFromEnd
+            )
+        )
+        guard let data = try? JSONEncoder().encode(p),
+              let json = String(data: data, encoding: .utf8) else { return }
+        socket?.write(string: json)
+    }
+
     /// 请求目录树（workspace.list）— 懒加载，只请求目标目录
     func requestWorkspaceList(path: String = "") {
         let p = ProtocolMessage(
@@ -493,7 +688,14 @@ class WebSocketManager: ObservableObject {
         isConnected = false
         status = "已断开"
         // socket 已置 nil，Starscream 回调会被 guard 拦截，这里显式同步 UI 状态。
-        onConnectionStateChanged?(false, "已断开")
+        updateConnectionSnapshot(
+            phase: .disconnected,
+            summary: "已断开",
+            detail: "",
+            relayConnected: false,
+            isAutoReconnectEnabled: false,
+            lastDisconnectedAt: Date()
+        )
         // 断开时清空窗口状态，避免切换到其他连接后残留
         currentAgentId = nil
         session = .empty
@@ -511,10 +713,18 @@ extension WebSocketManager: WebSocketDelegate {
             isConnected = true
             reconnectDelay = 3
             cancelReconnect()
-            onConnectionStateChanged?(true, "已连接")
+            updateConnectionSnapshot(
+                phase: .connected,
+                summary: "已连接",
+                detail: endpointURL.absoluteString,
+                lastError: "",
+                relayConnected: true,
+                isAutoReconnectEnabled: shouldAutoReconnect,
+                lastConnectedAt: Date()
+            )
             onConnected?()
         case .disconnected(let reason, let code):
-            onDisconnect(reason: reason.isEmpty ? "code \(code)" : reason)
+            onDisconnect(reason: disconnectReason(reason: reason, code: code))
             scheduleReconnectIfNeeded()
         case .text(let string):
             handle(string)
@@ -523,10 +733,10 @@ extension WebSocketManager: WebSocketDelegate {
                 handle(s)
             }
         case .cancelled:
-            onDisconnect()
+            onDisconnect(reason: "连接已取消")
             scheduleReconnectIfNeeded()
         case .error(let error):
-            onDisconnect(reason: error?.localizedDescription ?? "")
+            onDisconnect(reason: normalizeTransportError(error))
             scheduleReconnectIfNeeded()
         case .ping, .pong, .viabilityChanged, .reconnectSuggested, .peerClosed:
             break

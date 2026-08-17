@@ -248,6 +248,20 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertNil(store.usageInfo)
         XCTAssertTrue(store.availableModels.isEmpty)
     }
+
+    func testHistoryRewoundStoresDraftUntilConsumed() {
+        let store = ConversationStore()
+        store.accept(RemoteEvent(
+            id: "rw1",
+            timestamp: Date(),
+            payload: .history(.rewound(rewoundContent: "把 foo 改成 bar", removedUserMessageCount: 2))
+        ))
+
+        XCTAssertEqual(store.pendingRewoundDraft, "把 foo 改成 bar")
+        XCTAssertEqual(store.consumePendingRewoundDraft(), "把 foo 改成 bar")
+        XCTAssertNil(store.pendingRewoundDraft)
+        XCTAssertNil(store.consumePendingRewoundDraft())
+    }
     
     func testStaleGenerationModelListIsIgnored() {
         let store = ConversationStore()

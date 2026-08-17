@@ -16,12 +16,13 @@ export class WebSocketServerManager {
     this.port = port;
   }
 
-  public start(authToken: string, onError?: (err: Error) => void): void {
-    if (this.wss) return;
+  /** 启动本地 WS 服务；成功返回 true，token 不合法返回 false 供上层提示用户。 */
+  public start(authToken: string, onError?: (err: Error) => void): boolean {
+    if (this.wss) return true;
     const token = authToken.trim();
     if (token.length < 24) {
       console.error("❌ 本地 WebSocket 未启动：请配置至少 24 字符的 Token");
-      return;
+      return false;
     }
 
     this.wss = new WebSocketServer({
@@ -82,6 +83,7 @@ export class WebSocketServerManager {
       this.wss = null;
       onError?.(err);
     });
+    return true;
   }
 
   public setOnClientMessage(callback: (ws: WebSocket, text: string) => void): void {

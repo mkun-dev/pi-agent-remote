@@ -53,7 +53,7 @@ extension ChatViewModel {
             .sampleTool,
             .sampleTerminal
         ])
-        vm.conversationStore.updateConnectionState(connected: true, status: "Connected (Preview)")
+        vm.conversationStore.updateConnectionState(ConnectionStatusSnapshot(phase: .connected, summary: "Connected (Preview)", relayConnected: true))
         return vm
     }
 }

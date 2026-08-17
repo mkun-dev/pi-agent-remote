@@ -57,6 +57,7 @@ struct ChatView: View {
     @State private var isVoiceCancelPending = false
     @State private var showVoiceError = false
     @State private var showTaskTimeline = false
+    @State private var showQuickCommandPanel = false
     @FocusState private var inputFocused: Bool
     @StateObject private var scrollController = ChatScrollController()
     
@@ -126,8 +127,35 @@ struct ChatView: View {
         viewModel.send()
     }
     
+    private func insertComposerText(_ value: String) {
+        if viewModel.inputText.isEmpty {
+            viewModel.inputText = value
+        } else if viewModel.inputText.hasSuffix(" ") || value.count == 1 {
+            viewModel.inputText += value
+        } else {
+            viewModel.inputText += " " + value
+        }
+        inputFocused = true
+    }
+
+    /// P3：Steer 按钮——中断当前 turn 并把草稿作为新 turn 发送。
+    private func handleSteerTapped() {
+        scrollController.noteUserMessageSent()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        viewModel.send(steer: true)
+    }
+
+    /// P3：停止按钮——中断当前 turn（不发新消息）。
+    private func handleStopTapped() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        viewModel.stop()
+    }
+    
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            PiDesignSystem.Color.background
+                .ignoresSafeArea()
+            VStack(spacing: 0) {
             // Agent 状态 Header — 概览：连接、阶段、Tool、Model、Session、窗口选择、断开
             AgentStatusHeader(
                 store: store,
@@ -146,11 +174,33 @@ struct ChatView: View {
             
             ScrollViewReader { proxy in
                 GeometryReader { viewport in
-                    let msgs = visibleMessages
+                    let windowed = scrollController.windowedMessages(visibleMessages)
+                    let msgs = windowed.visible
+                    let hiddenCount = windowed.hiddenCount
                     let messageIDs = msgs.map(\.id)
                     ZStack(alignment: .bottomTrailing) {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: PiDesignSystem.Spacing.md) {
+                                if hiddenCount > 0 {
+                                    Button {
+                                        scrollController.revealAll()
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "chevron.up")
+                                                .font(.caption.weight(.semibold))
+                                            Text("还有 \(hiddenCount) 条更早的消息")
+                                            Text("展开")
+                                                .font(.caption.weight(.semibold))
+                                        }
+                                        .font(PiDesignSystem.Font.caption)
+                                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .piTintPanel(PiDesignSystem.Color.secondary, opacity: 0.08, borderOpacity: 0, radius: PiDesignSystem.Radius.md)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                                 ForEach(msgs) { msg in
                                     MessageRow(
                                         message: msg,
@@ -159,7 +209,8 @@ struct ChatView: View {
                                         onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
                                         onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
                                         onSelectFileChange: { selectedFileChange = $0 },
-                                        onSelectImage: { selectedImagePreview = $0 }
+                                        onSelectImage: { selectedImagePreview = $0 },
+                                        onEditUserMessage: { viewModel.rewindToUserMessage(messageID: msg.id) }
                                     )
                                     .id(msg.id)
                                     .transition(.asymmetric(
@@ -246,15 +297,11 @@ struct ChatView: View {
                                     .font(.subheadline.weight(.semibold))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 9)
-                                    .background(.regularMaterial, in: Capsule())
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(Color.secondary.opacity(0.18), lineWidth: 0.5)
-                                    }
+                                    .piCapsuleSurface(tint: PiDesignSystem.Color.panelElevated.opacity(0.96))
                                     .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(PiDesignSystem.Color.primary)
                             .accessibilityLabel("跳到底部")
                             .accessibilityHint("显示最新消息")
                             .padding(.trailing, 18)
@@ -275,6 +322,7 @@ struct ChatView: View {
             )
             
             Divider()
+                .overlay(PiDesignSystem.Color.divider)
             
             // 斜杠命令补全
             if !isVoiceActive && viewModel.inputText.hasPrefix("/") {
@@ -296,49 +344,33 @@ struct ChatView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
             
-            // 输入栏：语音识别只写入现有 inputText，仍由用户确认后发送。
-            HStack(alignment: .bottom, spacing: 10) {
-                Button {
-                    showPhotoPicker = true
-                } label: {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.blue)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("发送图片到 PC")
-                .disabled(isVoiceActive)
-                
-                TextField("输入消息发送给 Pi...", text: $viewModel.inputText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
-                    .focused($inputFocused)
-                    .disabled(isVoiceActive)
-                
-                VoiceInputButton(
-                    state: speechService.state,
-                    isCancelPending: $isVoiceCancelPending,
-                    onStart: startVoiceInput,
-                    onStop: stopVoiceInput,
-                    onCancel: cancelVoiceInput
-                )
-                
-                Button {
-                    handleSendTapped()
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(width: 44, height: 44)
-                .disabled(
-                    isVoiceActive ||
-                    viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
+            ComposerSurface(
+                inputText: $viewModel.inputText,
+                isVoiceActive: isVoiceActive,
+                speechState: speechService.state,
+                isCancelPending: $isVoiceCancelPending,
+                isWorking: store.agentState.isWorking,
+                onShowAttachments: { showPhotoPicker = true },
+                onShowQuickCommands: { showQuickCommandPanel = true },
+                onStartVoice: startVoiceInput,
+                onStopVoice: stopVoiceInput,
+                onCancelVoice: cancelVoiceInput,
+                onStopAgent: handleStopTapped,
+                onSteer: handleSteerTapped,
+                onSend: handleSendTapped
+            )
+            .focused($inputFocused)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+            .background(PiDesignSystem.Color.background)
+
+            QuickCommandDockView { snippet in
+                insertComposerText(snippet)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(UIColor.secondarySystemBackground))
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.agentState)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: speechService.state)
@@ -375,6 +407,7 @@ struct ChatView: View {
         .onDisappear {
             if speechService.state.isActive { cancelVoiceInput() }
         }
+        .preferredColorScheme(.dark)
         .navigationTitle("Pi Agent")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -409,6 +442,15 @@ struct ChatView: View {
                 viewModel.uploadMedia(images: images, caption: caption)
                 showPhotoPicker = false
             }
+        }
+        .sheet(isPresented: $showQuickCommandPanel) {
+            QuickCommandPanelView { snippet in
+                insertComposerText(snippet)
+                showQuickCommandPanel = false
+            }
+            .presentationDetents([.fraction(0.34), .medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
         .sheet(item: $selectedFileChange) { change in
             DiffViewer(change: change, onOpenInWorkspace: { path in
@@ -459,6 +501,7 @@ struct MessageRow: View {
     let onToggleTrace: () -> Void
     let onSelectFileChange: (FileChange) -> Void
     let onSelectImage: (ImagePreviewItem) -> Void
+    let onEditUserMessage: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
@@ -473,18 +516,27 @@ struct MessageRow: View {
     
     // MARK: - 居中状态提示（如 running）
     private var statusRow: some View {
-        Text(message.content)
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 2)
+        HStack(spacing: 8) {
+            Capsule()
+                .fill(PiDesignSystem.Color.secondary)
+                .frame(width: 10, height: 4)
+            Text(message.content)
+                .font(PiDesignSystem.Font.caption)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
+            Capsule()
+                .fill(PiDesignSystem.Color.secondary)
+                .frame(height: 1)
+                .opacity(0.35)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
     }
     
     // MARK: - 常规消息行（气泡布局）
     private var normalRow: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             if !message.isUser { avatar }
-            if message.isUser { Spacer(minLength: 40) }
+            if message.isUser { Spacer(minLength: 52) }
             
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
                 contentBody
@@ -493,13 +545,13 @@ struct MessageRow: View {
                 }
             }
             .frame(
-                maxWidth: message.kind == .text && !message.isUser ? .infinity : 300,
+                maxWidth: message.kind == .text && !message.isUser ? .infinity : 308,
                 alignment: message.isUser ? .trailing : .leading
             )
             
             if message.isUser { avatar }
             if !message.isUser && message.kind != .text {
-                Spacer(minLength: 40)
+                Spacer(minLength: 52)
             }
         }
         // 长按复制消息文本
@@ -519,27 +571,36 @@ struct MessageRow: View {
         case .text:
             if message.isUser {
                 // 用户：蓝色渐变气泡
-                Text(message.content)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        LinearGradient(
-                            colors: [PiDesignSystem.Color.userBubbleStart, PiDesignSystem.Color.userBubbleEnd],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("命令")
+                        .font(PiDesignSystem.Font.caption2)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(message.content)
+                        .font(PiDesignSystem.Font.monoSpan)
+                        .foregroundStyle(.white)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    LinearGradient(
+                        colors: [PiDesignSystem.Color.userBubbleStart, PiDesignSystem.Color.userBubbleEnd],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
                     )
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous))
-                    .shadow(color: .blue.opacity(0.25), radius: PiDesignSystem.Shadow.userBubbleRadius, x: 0, y: PiDesignSystem.Shadow.userBubbleY)  // 层次区分
-                    .textSelection(.enabled)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous)
+                        .stroke(PiDesignSystem.Color.accent.opacity(0.18), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous))
+                .shadow(color: PiDesignSystem.Color.accent.opacity(0.18), radius: 10, x: 0, y: 4)
             } else {
                 // Pi：最终 Markdown 正文 + 轻量 Agent Trace + 左侧 accent 条
                 HStack(spacing: 0) {
-                    // 左侧 accent 条（Claude/Cursor 风格）
                     Rectangle()
-                        .fill(PiDesignSystem.Color.border)
+                        .fill(message.isStreaming ? PiDesignSystem.Color.streaming : PiDesignSystem.Color.accent.opacity(0.55))
                         .frame(width: 3)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                     
                     VStack(alignment: .leading, spacing: 0) {
                         // Pi 标识头
@@ -561,18 +622,22 @@ struct MessageRow: View {
                     }
                 }
                 .background(PiDesignSystem.Color.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous)
+                        .stroke(PiDesignSystem.Color.border, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous))
             }
         case .thinking:
             // 思考：半透明橙气泡 + 闪烁光标
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(message.content)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(PiDesignSystem.Color.primary)
                 ThinkingCursor()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color.orange.opacity(0.12))
+            .background(PiDesignSystem.Color.thinking.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         case .tool:
             // 工作期间展开，Agent 完成后自动折叠；用户可随时查看历史详情。
@@ -606,8 +671,9 @@ struct MessageRow: View {
             // 每个 delta 仅更新纯文本，不解析 Markdown、不做布局动画，避免闪烁和主线程抖动。
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(message.content)
-                    .font(.body)
-                    .lineSpacing(3)
+                    .font(PiDesignSystem.Font.monoSpan)
+                    .foregroundStyle(PiDesignSystem.Color.primary)
+                    .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                 StreamingCursor()
@@ -658,29 +724,42 @@ struct MessageRow: View {
     @ViewBuilder
     private var avatar: some View {
         if message.isUser {
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 26))
-                .foregroundStyle(LinearGradient(colors: [.blue, .indigo],
-                                                startPoint: .top, endPoint: .bottom))
+            Image(systemName: "terminal.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(PiDesignSystem.Color.background)
+                .padding(8)
+                .background(Circle().fill(PiDesignSystem.Color.accent))
         } else if message.kind == .text || message.kind == .thinking || message.kind == .image {
-            Image(systemName: "sparkles")
-                .font(.system(size: 14))
-                .foregroundStyle(.white)
-                .padding(6)
-                .background(Circle().fill(LinearGradient(colors: [.purple, .pink],
-                                                        startPoint: .top, endPoint: .bottom)))
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(PiDesignSystem.Color.background)
+                .padding(7)
+                .background(Circle().fill(PiDesignSystem.Color.panelElevated))
+                .overlay(Circle().stroke(PiDesignSystem.Color.border, lineWidth: 1))
         }
     }
     
     // MARK: - 时间 + 送达状态
     private var metaRow: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
+            if message.isUser && message.kind == .text && message.delivery == .sent {
+                Button {
+                    onEditUserMessage()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.caption2)
+                        .foregroundStyle(store.agentState.isWorking ? PiDesignSystem.Color.tertiary : PiDesignSystem.Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(store.agentState.isWorking)
+                .accessibilityLabel("编辑这条用户消息")
+            }
             if message.isUser {
                 deliveryIcon
             }
             Text(message.timestamp, style: .time)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
         }
     }
     
@@ -691,15 +770,15 @@ struct MessageRow: View {
         case .sending:
             Image(systemName: "clock")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
         case .failed:
             Image(systemName: "exclamationmark.triangle")
                 .font(.caption2)
-                .foregroundColor(.red)
+                .foregroundStyle(PiDesignSystem.Color.failed)
         }
     }
 }
@@ -729,11 +808,11 @@ struct ModelPickerView: View {
                     Section {
                         HStack(spacing: 12) {
                             Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(PiDesignSystem.Color.completed)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("当前模型")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(PiDesignSystem.Font.caption)
+                                    .foregroundStyle(PiDesignSystem.Color.secondary)
                                 Text(current)
                                     .font(.headline)
                             }
@@ -751,9 +830,9 @@ struct ModelPickerView: View {
                     Section {
                         HStack {
                             Image(systemName: "questionmark.circle")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PiDesignSystem.Color.secondary)
                             Text("暂未获取到当前模型")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PiDesignSystem.Color.secondary)
                         }
                     }
                 }
@@ -762,7 +841,7 @@ struct ModelPickerView: View {
                 Section {
                     if filteredModels.isEmpty {
                         Text("无匹配模型")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(PiDesignSystem.Color.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 12)
                     } else {
@@ -774,9 +853,9 @@ struct ModelPickerView: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: model == currentModel ? "largecircle.fill.circle" : "circle")
-                                        .foregroundStyle(model == currentModel ? .blue : .secondary)
+                                        .foregroundStyle(model == currentModel ? PiDesignSystem.Color.accent : PiDesignSystem.Color.secondary)
                                     Text(model)
-                                        .foregroundColor(.primary)
+                                        .foregroundStyle(PiDesignSystem.Color.primary)
                                         .lineLimit(1)
                                     Spacer()
                                     if isSwitching && pendingSelection == model {
@@ -784,7 +863,7 @@ struct ModelPickerView: View {
                                             .scaleEffect(0.7)
                                     } else if model == currentModel {
                                         Image(systemName: "checkmark")
-                                            .foregroundColor(.blue)
+                                            .foregroundStyle(PiDesignSystem.Color.accent)
                                             .font(.caption.weight(.semibold))
                                     }
                                 }
@@ -846,21 +925,21 @@ struct SlashSuggestionsView: View {
         } else {
             AnyView(
                 VStack(spacing: 0) {
-                    Divider()
+                    Divider().overlay(PiDesignSystem.Color.divider)
                     ForEach(matches) { cmd in
                         Button {
                             onSelect(cmd)
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: cmd.icon)
-                                    .foregroundColor(.blue)
+                                    .foregroundStyle(PiDesignSystem.Color.accent)
                                     .frame(width: 22)
                                 Text(cmd.id)
                                     .font(.system(.body, design: .monospaced))
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(PiDesignSystem.Color.primary)
                                 Text(cmd.description)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(PiDesignSystem.Color.secondary)
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
@@ -868,12 +947,175 @@ struct SlashSuggestionsView: View {
                         }
                         .buttonStyle(.plain)
                         if cmd.id != matches.last?.id {
-                            Divider().padding(.leading, 46)
+                            Divider().padding(.leading, 46).overlay(PiDesignSystem.Color.divider)
                         }
                     }
                 }
-                .background(Color(UIColor.secondarySystemBackground))
+                .piCard(color: PiDesignSystem.Color.surface, radius: 16)
+                .padding(.horizontal, 12)
             )
+        }
+    }
+}
+
+struct ComposerSurface: View {
+    @Binding var inputText: String
+    let isVoiceActive: Bool
+    let speechState: SpeechRecognitionState
+    @Binding var isCancelPending: Bool
+    let isWorking: Bool
+    let onShowAttachments: () -> Void
+    let onShowQuickCommands: () -> Void
+    let onStartVoice: () -> Void
+    let onStopVoice: () -> Void
+    let onCancelVoice: () -> Void
+    let onStopAgent: () -> Void
+    let onSteer: () -> Void
+    let onSend: () -> Void
+
+    var body: some View {
+        PiGlassComposer {
+            HStack(alignment: .bottom, spacing: 10) {
+                VStack(spacing: 8) {
+                    composerIconButton(systemName: "plus", tint: PiDesignSystem.Color.accent, action: onShowQuickCommands)
+                    composerIconButton(systemName: "photo", tint: PiDesignSystem.Color.secondary, action: onShowAttachments)
+                }
+                .padding(.bottom, 2)
+
+                TextField("输入命令或消息…", text: $inputText, axis: .vertical)
+                    .font(PiDesignSystem.Font.body)
+                    .foregroundStyle(PiDesignSystem.Color.primary)
+                    .lineLimit(1...5)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .piInputSurface(radius: 18)
+                    .disabled(isVoiceActive)
+
+                VoiceInputButton(
+                    state: speechState,
+                    isCancelPending: $isCancelPending,
+                    onStart: onStartVoice,
+                    onStop: onStopVoice,
+                    onCancel: onCancelVoice
+                )
+                .frame(width: 44, height: 44)
+
+                if isWorking {
+                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        composerIconButton(systemName: "stop.fill", tint: PiDesignSystem.Color.failed, filled: true, action: onStopAgent)
+                    } else {
+                        composerIconButton(systemName: "arrow.uturn.backward", tint: PiDesignSystem.Color.warning, filled: false, action: onSteer)
+                        composerIconButton(systemName: "paperplane.fill", tint: PiDesignSystem.Color.accent, filled: true, action: onSend)
+                            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                } else {
+                    composerIconButton(systemName: "paperplane.fill", tint: PiDesignSystem.Color.accent, filled: true, action: onSend)
+                        .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func composerIconButton(systemName: String, tint: SwiftUI.Color, filled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(filled ? SwiftUI.Color.white : tint)
+                .frame(width: 44, height: 44)
+                .background((filled ? tint : PiDesignSystem.Color.panelElevated), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(filled ? tint.opacity(0.2) : PiDesignSystem.Color.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isVoiceActive && (systemName == "paperplane.fill" || systemName == "arrow.uturn.backward" || systemName == "stop.fill"))
+    }
+}
+
+struct PiGlassComposer<Content: View>: View {
+    let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+    var body: some View {
+        content
+            .padding(12)
+            .piGlassCard(radius: 22)
+    }
+}
+
+struct QuickCommandDockView: View {
+    let snippets = ["Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "ls -la", "htop"]
+    let onInsert: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(snippets, id: \.self) { snippet in
+                    Button { onInsert(mapSnippet(snippet)) } label: {
+                        Text(snippet)
+                            .font(snippet.count <= 4 ? PiDesignSystem.Font.captionBold : PiDesignSystem.Font.caption)
+                            .foregroundStyle(PiDesignSystem.Color.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .piCapsuleSurface()
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func mapSnippet(_ value: String) -> String {
+        switch value {
+        case "Esc": return "\u{1B}"
+        case "Tab": return "\t"
+        default: return value
+        }
+    }
+}
+
+struct QuickCommandPanelView: View {
+    let systems = ["Esc", "Tab", "Ctrl", "Alt"]
+    let navigation = ["↑", "↓", "←", "→", "Home", "End", "PgUp", "PgDn"]
+    let symbols = ["/", "|", "~", "-", "."]
+    let snippets = ["ls -la", "htop", "tail -f", "sudo journalctl -u"]
+    let onInsert: (String) -> Void
+
+    var body: some View {
+        ZStack {
+            PiDesignSystem.Color.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Quick Keys")
+                        .font(PiDesignSystem.Font.headline)
+                        .foregroundStyle(PiDesignSystem.Color.primary)
+                    quickSection("系统键", items: systems)
+                    quickSection("导航键", items: navigation)
+                    quickSection("终端符号", items: symbols)
+                    quickSection("历史片段", items: snippets, adaptive: 130)
+                }
+                .padding(20)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func quickSection(_ title: String, items: [String], adaptive: CGFloat = 72) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(PiDesignSystem.Font.caption)
+                .foregroundStyle(PiDesignSystem.Color.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: adaptive), spacing: 10)], spacing: 10) {
+                ForEach(items, id: \.self) { item in
+                    Button { onInsert(item) } label: {
+                        Text(item)
+                            .font(item.count <= 4 ? PiDesignSystem.Font.captionBold : PiDesignSystem.Font.body)
+                            .foregroundStyle(PiDesignSystem.Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .piSecondaryButton()
+                }
+            }
         }
     }
 }

@@ -300,8 +300,8 @@ func parseInlineMarkdown(_ text: String) -> AttributedString {
     }
     for range in codeRanges {
         result[range].font = .system(.subheadline, design: .monospaced)
-        result[range].foregroundColor = .accentColor
-        result[range].backgroundColor = Color.secondary.opacity(0.12)
+        result[range].foregroundColor = PiDesignSystem.Color.accent
+        result[range].backgroundColor = PiDesignSystem.Color.secondary.opacity(0.12)
     }
     
     inlineMarkdownCache.setObject(

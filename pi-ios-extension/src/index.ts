@@ -202,11 +202,17 @@ export default function (pi: ExtensionAPI) {
 
   // ================= iOS → Pi: 统一消息处理 =================
   let agentBusy = false;
+  // before_agent_start → agent_start 兜底：极端情况下 agent_start 未触发时，
+  // receiving 状态会卡住；定时器负责收口回 idle（#5）。
+  let receivingFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  let awaitingAgentStart = false;
 
   // ─── 消息排队（飞书式：Pi 忙时排队，空闲时处理） ───
   const pendingQueue: { text: string; respond: (event: unknown) => void }[] = [];
   let queueFlushTimer: ReturnType<typeof setTimeout> | null = null;
   let ctxRef: any = null;  // 供 abort/compact 使用
+  // Steer（打断重发）：abort 后挂起的消息，agent_end 时优先发出（不走队列）（P3）
+  let pendingInterruptSend: { text: string; respond: (event: unknown) => void } | null = null;
 
   /** 入队并尝试处理 */
   function enqueueText(text: string, respond: (event: unknown) => void): void {
@@ -224,6 +230,26 @@ export default function (pi: ExtensionAPI) {
       pi.sendUserMessage(item.text);
     } catch (e) {
       console.error("❌ sendUserMessage failed:", e);
+    }
+  }
+
+  /** Steer：中断当前 turn，挂起重发；agent_end 后优先发出（P3）。 */
+  function interruptAndSend(text: string, respond: (event: unknown) => void): void {
+    pendingInterruptSend = { text, respond };
+    pendingQueue.length = 0;  // 打断时清掉旧队列，避免歧义
+    try {
+      if (ctxRef && !ctxRef.isIdle?.()) {
+        ctxRef.abort?.();
+        respond(ProtocolHandler.createAgentOutput("⏭️ 已打断当前任务，即将发送新消息", "message"));
+      } else {
+        // 已经空闲：直接发
+        pendingInterruptSend = null;
+        try { pi.sendUserMessage(text); }
+        catch (e) { console.error("❌ steer sendUserMessage failed:", e); }
+      }
+    } catch (e) {
+      pendingInterruptSend = null;
+      respond(ProtocolHandler.createAgentOutput(`❌ 打断失败: ${e}`, "message"));
     }
   }
 
@@ -313,6 +339,11 @@ export default function (pi: ExtensionAPI) {
         }
         // 附带 Workspace 文件上下文（来自 iOS「询问Agent」）：在消息前注入路径块，让 Agent 知道用户在问哪个文件。
         const finalText = injectFileContext(trimmed, msg.payload?.context);
+        // Steer（P3）：打断当前 turn 并作为新 turn 发送，不排队
+        if (msg.payload?.steer === true) {
+          interruptAndSend(finalText, emit);
+          return;
+        }
         // 转发给 Pi Agent（Pi 忙时排队，飞书式）
         if (agentBusy) {
           enqueueText(finalText, emit);
@@ -361,8 +392,15 @@ export default function (pi: ExtensionAPI) {
         iosAnswersCache.set(toolCallId, msg.payload.answers);
         questionnaireToToolCall.delete(qid);
         if (pendingQuestionnaire?.id === qid) pendingQuestionnaire = null;  // 已回答，清除缓存
-        // 自动跳过终端 TUI：按 Esc 取消弹窗（触发 tool_result → 替换为 iOS 答案）
-        try { process.stdin.push("\x1b"); } catch { /* 非交互模式无 stdin */ }
+        // 自动跳过终端 TUI：注入 Esc 取消弹窗（触发 tool_result → 替换为 iOS 答案）。
+        // 注意：依赖 Pi 内部监听 stdin 的问卷实现，属于脆弱方案；非 TTY 环境可能失效。
+        // 即使失效，iOS 答案仍会通过 iosAnswersCache 在 tool_result 时替换，仅终端可能仍弹出。
+        try {
+          process.stdin.push("\x1b");
+          console.warn("⚠️ 已注入 Esc 跳过终端问卷（依赖 stdin，非 TTY 环境可能失效）");
+        } catch (e) {
+          console.warn("⚠️ stdin 注入失败，终端问卷可能仍显示（iOS 答案已缓存将替换）:", e);
+        }
       }
     } else if (msg?.type === "questionnaire.sync") {
       // iOS 重连后同步：重发待处理问卷
@@ -378,6 +416,8 @@ export default function (pi: ExtensionAPI) {
       void handleWorkspaceReadFile(msg, emit);
     } else if (msg?.type === "workspace.search") {
       void handleWorkspaceSearch(msg, emit);
+    } else if (msg?.type === "message.rewind") {
+      handleRewind(msg, emit);
     } else {
     }
   }
@@ -573,7 +613,10 @@ export default function (pi: ExtensionAPI) {
     const reply = (text: string) => respond(ProtocolHandler.createAgentOutput(text, "message"));
     try {
       const base64 = String(msg?.payload?.base64 ?? "");
-      const uploadRoot = resolve(sessionCtx?.cwd ?? process.cwd(), "pi-ios-uploads");
+      const requestedDir = String(msg?.payload?.dir ?? "pi-ios-uploads").trim();
+      // 仅允许简单目录名（防止路径穿越）；非法或缺失时回退默认目录（#8）
+      const dirName = /^[a-zA-Z0-9._-]+$/.test(requestedDir) ? requestedDir : "pi-ios-uploads";
+      const uploadRoot = resolve(sessionCtx?.cwd ?? process.cwd(), dirName);
       const saved = saveUploadedImage(base64, uploadRoot);
       reply(`📁 已保存: ${saved.path}`);
       broadcast(ProtocolHandler.createFileChange(saved.path, "created"));
@@ -770,6 +813,100 @@ export default function (pi: ExtensionAPI) {
     respond(ProtocolHandler.createAgentOutput("✅ 问卷已提交，终端按 Enter 继续", "message"));
   }
 
+  /**
+   * P4 git 式撤回：把 session leaf 移到“倒数第 N 条用户消息”之前，
+   * 之后用户重发消息即形成新分支，旧消息与后续回复从 LLM 上下文消失。
+   *
+   * 约束：必须在 Agent 空闲时进行；Pi 运行时 sessionManager 为完整对象
+   * （类型声明是只读，实际 runner 内部存的是可写 SessionManager），用 as any 调用。
+   */
+  function handleRewind(msg: any, respond: (event: unknown) => void): void {
+    const reply = (text: string) => respond(ProtocolHandler.createAgentOutput(text, "message"));
+    // 忙时拒绝：处理中动 session 结构会损坏状态
+    if (agentBusy) {
+      reply("⏳ Agent 处理中，无法撤回，请等它空闲后再试");
+      return;
+    }
+    const nFromEnd = Number(msg?.payload?.userMessageIndexFromEnd ?? 0);
+    if (!Number.isInteger(nFromEnd) || nFromEnd < 1) {
+      reply("❌ 无效的撤回位置");
+      return;
+    }
+    const sm = sessionManagerRef as any;
+    if (!sm || typeof sm.getBranch !== "function" || typeof sm.branch !== "function") {
+      reply("❌ 会话未就绪，无法撤回");
+      return;
+    }
+    let branch: any[];
+    try {
+      branch = sm.getBranch();
+    } catch (e) {
+      reply(`❌ 读取会话失败: ${e}`);
+      return;
+    }
+    // 只允许编辑“文本用户消息”；和 iOS 端 Message(kind: .text, sender: .user) 的计数保持一致。
+    const userEntries = branch.filter(
+      (e: any) => e?.type === "message"
+        && e?.message?.role === "user"
+        && typeof e?.message?.content === "string"
+    );
+    if (nFromEnd > userEntries.length) {
+      reply(`❌ 没有那么早的用户消息（仅有 ${userEntries.length} 条）`);
+      return;
+    }
+    const target = userEntries[userEntries.length - nFromEnd];
+    const parentId = target?.parentId ?? null;
+    const targetContent = typeof target?.message?.content === "string"
+      ? target.message.content
+      : "";
+    try {
+      if (parentId === null) {
+        if (typeof sm.resetLeaf === "function") sm.resetLeaf();
+        else throw new Error("sessionManager.resetLeaf 不可用");
+      } else {
+        sm.branch(parentId);  // leaf 移到目标之前；下次 append 即新分支
+      }
+    } catch (e) {
+      reply(`❌ 撤回失败: ${e}`);
+      return;
+    }
+    // git 式撤回后，旧内存队列也必须一起丢弃；否则会把已撤回路径上的消息重新补发到新分支。
+    pendingQueue.length = 0;
+    pendingInterruptSend = null;
+    if (queueFlushTimer) {
+      clearTimeout(queueFlushTimer);
+      queueFlushTimer = null;
+    }
+    // 手动 branch 不会自动刷新我们缓存的 session info；补一条 session.update 让 iOS 元数据同步。
+    if (sessionProvider) {
+      const current = sessionProvider();
+      const nextInfo = {
+        ...current,
+        leafId: sm.getLeafId?.() ?? null,
+        entryCount: sm.getEntries?.()?.length ?? current.entryCount,
+        reason: "rewind"
+      };
+      sessionProvider = () => nextInfo;
+      broadcast(ProtocolHandler.createSessionUpdate("rewind", nextInfo));
+    }
+    // 本地用量缓存随历史变化失效，重算（重算后新分支可能更小）
+    resetUsageAccumulator(currentUsageSessionKey());
+    const removed = nFromEnd;  // 语义：撤回目标及其后的全部用户消息（含目标）
+    // 先广播新分支的完整历史，让 iOS 用现有 applyHistory() 全量重建消息/日志/活动。
+    if (sessionManagerRef) {
+      const info = sessionProvider?.();
+      broadcast(scopeEvent(ProtocolHandler.createSessionHistory(
+        buildHistory(sessionManagerRef),
+        info?.sessionId ?? null
+      )));
+    }
+    // 再发一条轻量控制事件：只负责把原消息文本回填到输入框。
+    broadcast(scopeEvent(ProtocolHandler.createHistoryRewound(targetContent, removed)));
+    reply(`↩️ 已撤回最近 ${removed} 条用户消息，输入框已回填，编辑后发送即生效`);
+    // 同步刷新用量（基于新 leaf）
+    broadcastUsageInfo();
+  }
+
   /** Phase 4: 列出当前目录的历史会话（供 iOS 端管理） */
   async function handleSessionList(respond: (event: unknown) => void): Promise<void> {
     try {
@@ -851,9 +988,20 @@ export default function (pi: ExtensionAPI) {
     // 中继模式下不需要本地 WS 服务器（避免端口 3001 冲突）
     if (!relay) {
       // 局域网模式同样要求共享 Token；未配置时服务器不会开放 3001 端口。
-      wsServer.start(relayCfg.token ?? "");
+      const started = wsServer.start(relayCfg.token ?? "");
+      if (!started) {
+        ctx?.ui?.notify?.(
+          "❌ 本地 WebSocket 未启动：请配置至少 24 字符的 Token（/ios-config local <token>）",
+          "warning"
+        );
+      }
     } else {
-      // 中继已配置：跳过本地 WS，仅通过中继通信
+      // 中继已配置：自动连接（无需手动 /ios-connect），每次 session_start 同步最新 name/cwd（#1）
+      relay.connect({
+        agentId: windowAgentId,
+        name: pi.getSessionName?.() ?? null,
+        cwd: ctx.cwd
+      });
     }
 
     // 建立会话信息提供器（供 session.resume / 广播使用）
@@ -908,6 +1056,8 @@ export default function (pi: ExtensionAPI) {
     if (thinkingFlushTimer) clearTimeout(thinkingFlushTimer);
     thinkingFlushTimer = null;
     thinkingPending = "";
+    awaitingAgentStart = false;
+    if (receivingFallbackTimer) { clearTimeout(receivingFallbackTimer); receivingFallbackTimer = null; }
     resetAssistantStream();
     activeToolStatuses.clear();
     toolArgsCache.clear();
@@ -1300,11 +1450,25 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // Tool 结束
+  // Tool 结束（合并 status + tool.end + 文件变更广播，避免分散 handler 漏改，#7）
   pi.on("tool_execution_end", async (event, _ctx) => {
     activeToolStatuses.delete(event.toolCallId);
-    broadcast(ProtocolHandler.createToolEnd(!event.isError, event.toolCallId));
 
+    const args = toolArgsCache.get(event.toolCallId);
+    const snapshot = fileBeforeCache.get(event.toolCallId);
+    toolArgsCache.delete(event.toolCallId);
+    fileBeforeCache.delete(event.toolCallId);
+
+    // 已处理的问卷清除（与 tool_result 的清理互不冲突）
+    if (pendingQuestionnaire) {
+      const qid = pendingQuestionnaire.id;
+      if (qid && questionnaireToToolCall.get(qid) === event.toolCallId) {
+        pendingQuestionnaire = null;
+      }
+    }
+
+    // 1) tool.end + 状态
+    broadcast(ProtocolHandler.createToolEnd(!event.isError, event.toolCallId));
     const remainingTool = Array.from(activeToolStatuses.values()).pop();
     if (remainingTool) {
       broadcast(ProtocolHandler.createStatus("using_tool", remainingTool));
@@ -1313,6 +1477,54 @@ export default function (pi: ExtensionAPI) {
         description: event.isError ? "工具执行失败，正在继续分析" : "继续分析"
       }));
     }
+
+    // 2) 文件变更广播（只接受成功的文件写入类工具）
+    const toolName = event.toolName || "";
+    if (event.isError || !isFileMutationTool(toolName)) return;
+    const path = snapshot?.path ?? extractFilePath(args);
+    if (!path) return;
+
+    const normalizedTool = toolName.toLowerCase();
+    let action: "modified" | "created" | "deleted" = "modified";
+    if (/(delete|remove)/.test(normalizedTool)) {
+      action = "deleted";
+    } else if (/(write|create)/.test(normalizedTool) && snapshot && !snapshot.existed) {
+      action = "created";
+    }
+
+    let stats: { additions?: number; deletions?: number } = {};
+    const details = (event as any).result?.details;
+    const patch = typeof details?.patch === "string"
+      ? details.patch
+      : (typeof details?.diff === "string" ? details.diff : "");
+
+    if (patch) {
+      stats = countPatchChanges(patch);
+    } else if (Array.isArray(args?.edits)) {
+      const additions = args.edits.reduce(
+        (sum: number, edit: any) => sum + countTextLines(String(edit?.newText ?? "")),
+        0
+      );
+      const deletions = args.edits.reduce(
+        (sum: number, edit: any) => sum + countTextLines(String(edit?.oldText ?? "")),
+        0
+      );
+      stats = { additions, deletions };
+    } else if (typeof args?.oldText === "string" || typeof args?.newText === "string") {
+      stats = {
+        additions: countTextLines(String(args?.newText ?? "")),
+        deletions: countTextLines(String(args?.oldText ?? ""))
+      };
+    } else if (typeof args?.content === "string") {
+      stats.additions = countTextLines(args.content);
+      if (action === "modified" && snapshot?.content !== null && snapshot?.content !== undefined) {
+        stats.deletions = countTextLines(snapshot.content);
+      }
+    } else if (action === "deleted" && snapshot?.content !== null && snapshot?.content !== undefined) {
+      stats.deletions = countTextLines(snapshot.content);
+    }
+
+    broadcast(ProtocolHandler.createFileChange(path, action, stats));
   });
 
   // tool_result: 双向同步答案（PC ↔ iOS）
@@ -1360,12 +1572,25 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (_event, _ctx) => {
+    awaitingAgentStart = true;
     broadcast(ProtocolHandler.createStatus("receiving", {
       description: "Pi 收到请求"
     }));
+    // 兜底：极端情况下 agent_start 未触发时，receiving 状态会卡住；15s 后收口回 idle（#5）。
+    if (receivingFallbackTimer) clearTimeout(receivingFallbackTimer);
+    receivingFallbackTimer = setTimeout(() => {
+      if (awaitingAgentStart) {
+        awaitingAgentStart = false;
+        console.warn("⚠️ agent_start 超时未触发，回退到 idle 状态");
+        broadcast(ProtocolHandler.createStatus("idle"));
+      }
+      receivingFallbackTimer = null;
+    }, 15_000);
   });
 
   pi.on("agent_start", async (_event, _ctx) => {
+    awaitingAgentStart = false;
+    if (receivingFallbackTimer) { clearTimeout(receivingFallbackTimer); receivingFallbackTimer = null; }
     agentBusy = true;
     agentFinalDisposition = "completed";
     activeToolStatuses.clear();
@@ -1376,6 +1601,8 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("agent_end", async (_event, _ctx) => {
     agentBusy = false;
+    awaitingAgentStart = false;
+    if (receivingFallbackTimer) { clearTimeout(receivingFallbackTimer); receivingFallbackTimer = null; }
     activeToolStatuses.clear();
     if (agentFinalDisposition === "completed") {
       broadcast(ProtocolHandler.createStatus("completed", {
@@ -1386,6 +1613,17 @@ export default function (pi: ExtensionAPI) {
     }
     // 保留 turn_end 刚累计的 usage，避免历史落盘时序导致数值回退。
     broadcastUsageInfo(false);
+    // Steer 重发优先于普通队列（P3）：打断后 agent_end 触发，立即发出挂起的消息
+    if (pendingInterruptSend) {
+      const pending = pendingInterruptSend;
+      pendingInterruptSend = null;
+      try { pi.sendUserMessage(pending.text); }
+      catch (e) {
+        console.error("❌ steer resend failed:", e);
+        pending.respond(ProtocolHandler.createAgentOutput(`❌ 打断后发送失败: ${e}`, "message"));
+      }
+      return;  // 已处理，跳过普通队列刷新
+    }
     scheduleFlush();  // 空闲后处理排队消息（飞书式）
   });
 
@@ -1437,61 +1675,8 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // ================= 文件变更事件广播（Phase 2 核心） =================
-  pi.on("tool_execution_end", async (event, _ctx) => {
-    const toolName = event.toolName || "";
-    const args = toolArgsCache.get(event.toolCallId);
-    const snapshot = fileBeforeCache.get(event.toolCallId);
-    toolArgsCache.delete(event.toolCallId);
-    fileBeforeCache.delete(event.toolCallId);
-
-    // 只接受成功的文件写入类工具；read/grep/find 不再误报文件修改。
-    if (event.isError || !isFileMutationTool(toolName)) return;
-    const path = snapshot?.path ?? extractFilePath(args);
-    if (!path) return;
-
-    const normalizedTool = toolName.toLowerCase();
-    let action: "modified" | "created" | "deleted" = "modified";
-    if (/(delete|remove)/.test(normalizedTool)) {
-      action = "deleted";
-    } else if (/(write|create)/.test(normalizedTool) && snapshot && !snapshot.existed) {
-      action = "created";
-    }
-
-    let stats: { additions?: number; deletions?: number } = {};
-    const details = (event as any).result?.details;
-    const patch = typeof details?.patch === "string"
-      ? details.patch
-      : (typeof details?.diff === "string" ? details.diff : "");
-
-    if (patch) {
-      stats = countPatchChanges(patch);
-    } else if (Array.isArray(args?.edits)) {
-      const additions = args.edits.reduce(
-        (sum: number, edit: any) => sum + countTextLines(String(edit?.newText ?? "")),
-        0
-      );
-      const deletions = args.edits.reduce(
-        (sum: number, edit: any) => sum + countTextLines(String(edit?.oldText ?? "")),
-        0
-      );
-      stats = { additions, deletions };
-    } else if (typeof args?.oldText === "string" || typeof args?.newText === "string") {
-      stats = {
-        additions: countTextLines(String(args?.newText ?? "")),
-        deletions: countTextLines(String(args?.oldText ?? ""))
-      };
-    } else if (typeof args?.content === "string") {
-      stats.additions = countTextLines(args.content);
-      if (action === "modified" && snapshot?.content !== null && snapshot?.content !== undefined) {
-        stats.deletions = countTextLines(snapshot.content);
-      }
-    } else if (action === "deleted" && snapshot?.content !== null && snapshot?.content !== undefined) {
-      stats.deletions = countTextLines(snapshot.content);
-    }
-
-    broadcast(ProtocolHandler.createFileChange(path, action, stats));
-  });
+  // ================= 文件变更事件广播 =================
+  // （已合并到上方 tool_execution_end 统一处理，避免分散 handler 漏改，#7）
 
   // ================= 文件同步工具（Phase 2 增强） =================
   pi.registerTool({
