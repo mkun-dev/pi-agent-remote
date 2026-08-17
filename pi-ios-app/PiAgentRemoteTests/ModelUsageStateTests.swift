@@ -128,7 +128,7 @@ final class ModelUsageStateTests: XCTestCase {
             totalInput: 5, totalOutput: 6, totalCacheRead: 1, totalCacheWrite: 0,
             totalReasoning: 0, totalTokens: 11, totalCost: 0.01
         ))))
-        store.updateConnectionState(connected: false, status: "已断开")
+        store.updateConnectionState(ConnectionStatusSnapshot(phase: .disconnected, summary: "已断开", relayConnected: false))
         
         XCTAssertTrue(store.availableModels.isEmpty)
         XCTAssertNil(store.currentModel)

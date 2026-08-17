@@ -9,7 +9,7 @@ final class DashboardDerivedDataTests: XCTestCase {
 
     private func connectedStore() -> ConversationStore {
         let store = ConversationStore()
-        store.updateConnectionState(connected: true, status: "已连接")
+        store.updateConnectionState(ConnectionStatusSnapshot(phase: .connected, summary: "已连接", relayConnected: true))
         return store
     }
 
