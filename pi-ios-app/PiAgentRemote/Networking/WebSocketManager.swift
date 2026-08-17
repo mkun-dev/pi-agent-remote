@@ -245,8 +245,8 @@ class WebSocketManager: ObservableObject {
             phase: shouldAutoReconnect ? .reconnecting(retryInSeconds: Int(reconnectDelay.rounded())) : (normalizedReason.isEmpty ? .disconnected : .error),
             summary: shouldAutoReconnect ? "等待重连" : (normalizedReason.isEmpty ? "已断开" : friendlyDisconnectSummary(reason: normalizedReason)),
             detail: normalizedReason.isEmpty ? nil : normalizedReason,
-            lastDisconnectReason: normalizedReason.isEmpty ? nil : normalizedReason,
             lastError: normalizedReason.isEmpty ? connectionSnapshot.lastError : normalizedReason,
+            lastDisconnectReason: normalizedReason.isEmpty ? nil : normalizedReason,
             relayConnected: false,
             isAutoReconnectEnabled: shouldAutoReconnect,
             lastDisconnectedAt: Date()

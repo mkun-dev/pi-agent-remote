@@ -22,7 +22,7 @@ struct TypewriterText: View {
             } else {
                 // 打字动画：纯文本逐字 + 闪烁光标（Text + 运算符要求两侧都是 Text）
                 let content: Text = Text(String(full.characters.prefix(count)))
-                    + Text("▍").foregroundStyle(PiDesignSystem.Color.thinking)
+                    + Text("▍").foregroundColor(PiDesignSystem.Color.thinking)
                 if timerEnabled {
                     content
                         .onReceive(Timer.publish(every: tickInterval, on: .main, in: .common).autoconnect()) { _ in
