@@ -961,7 +961,7 @@ struct SlashSuggestionsView: View {
 struct ComposerSurface: View {
     @Binding var inputText: String
     let isVoiceActive: Bool
-    let speechState: SpeechRecognitionState
+    let speechState: VoiceState
     @Binding var isCancelPending: Bool
     let isWorking: Bool
     let onShowAttachments: () -> Void
