@@ -450,7 +450,6 @@ struct ChatView: View {
             }
             .presentationDetents([.fraction(0.34), .medium, .large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
         }
         .sheet(item: $selectedFileChange) { change in
             DiffViewer(change: change, onOpenInWorkspace: { path in
@@ -1004,7 +1003,7 @@ struct ComposerSurface: View {
                     if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         composerIconButton(systemName: "stop.fill", tint: PiDesignSystem.Color.failed, filled: true, action: onStopAgent)
                     } else {
-                        composerIconButton(systemName: "arrow.uturn.backward", tint: PiDesignSystem.Color.warning, filled: false, action: onSteer)
+                        composerIconButton(systemName: "arrow.uturn.backward", tint: PiDesignSystem.Color.thinking, filled: false, action: onSteer)
                         composerIconButton(systemName: "paperplane.fill", tint: PiDesignSystem.Color.accent, filled: true, action: onSend)
                             .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
