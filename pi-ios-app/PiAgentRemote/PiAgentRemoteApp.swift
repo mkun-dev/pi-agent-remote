@@ -3,11 +3,55 @@ import SwiftUI
 @main
 struct PiAgentRemoteApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var crashMessage: String? = nil
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .preferredColorScheme(.dark)
+            if let crash = crashMessage {
+                // 诊断模式：把崩溃信息直接画在屏幕上，下次打开就能看到
+                CrashDiagnosticView(message: crash)
+            } else {
+                ContentView()
+                    .preferredColorScheme(.dark)
+                    .onAppear {
+                        // 启动时先读上一次崩溃记录
+                        crashMessage = CrashReporter.shared.lastCrash
+                    }
+            }
+        }
+    }
+}
+
+/// 全屏崩溃诊断视图：把上次崩溃的标题/详情/堆栈直接显示出来。
+/// 这样即使一打开就闪退，下一次启动也能看到“为什么崩”。
+struct CrashDiagnosticView: View {
+    let message: String
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("🚨 上次崩溃记录")
+                        .font(.title2.bold())
+                        .foregroundStyle(.red)
+                    Text(message)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("清除并重试") {
+                        CrashReporter.shared.clear()
+                        // 触发重新渲染，进入正常 App
+                        NotificationCenter.default.post(name: NSNotification.Name("CrashCleared"), object: nil)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                }
+                .padding()
+            }
+            .background(Color.black)
+            .preferredColorScheme(.dark)
+            .navigationTitle("崩溃诊断")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
