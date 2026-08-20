@@ -21,10 +21,8 @@ struct PhotoUploadView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                PiDesignSystem.Color.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: 18) {
+            ScrollView {
+                VStack(spacing: 18) {
                     if isProcessing {
                         ProgressView("正在处理图片…")
                             .padding(.vertical, 32)
@@ -33,11 +31,8 @@ struct PhotoUploadView: View {
                     } else {
                         previewGrid
                         TextField("添加说明（可选）", text: $caption, axis: .vertical)
-                            .font(PiDesignSystem.Font.body)
-                            .foregroundStyle(PiDesignSystem.Color.primary)
+                            .textFieldStyle(.roundedBorder)
                             .lineLimit(1...4)
-                            .padding(12)
-                            .piInputSurface()
                         
                         Button {
                             onUpload(preparedImages, caption)
@@ -46,32 +41,29 @@ struct PhotoUploadView: View {
                             Label("发送 \(preparedImages.count) 张图片", systemImage: "paperplane.fill")
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .piPrimaryButton()
+                        .buttonStyle(.borderedProminent)
                         
                         PhotosPicker(selection: $selectedItems, maxSelectionCount: 6, matching: .images) {
                             Label("重新选择", systemImage: "photo.on.rectangle")
-                                .frame(minWidth: 140, minHeight: 44)
+                                .frame(minHeight: 44)
                         }
-                        .piSecondaryButton()
                     }
                     
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
-                            .foregroundStyle(PiDesignSystem.Color.failed)
+                            .foregroundStyle(Color.red)
                             .accessibilityLabel("图片处理失败，\(errorMessage)")
                     }
                     
                     Text("最多选择 6 张图片；将压缩到最长边 1600 像素后保存到 PC。")
                         .font(.caption)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
-                    .padding(16)
-                }
+                .padding(16)
             }
             .navigationTitle("发送图片")
-            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -89,7 +81,7 @@ struct PhotoUploadView: View {
         VStack(spacing: 14) {
             Image(systemName: "photo.stack")
                 .font(.system(size: 42))
-                .foregroundStyle(PiDesignSystem.Color.accent)
+                .foregroundStyle(Color.accentColor)
                 .accessibilityHidden(true)
             Text("选择要发送给 Pi 的图片")
                 .font(.headline)
@@ -97,8 +89,7 @@ struct PhotoUploadView: View {
                 Label("从相册选择", systemImage: "photo.on.rectangle")
                     .frame(minWidth: 160, minHeight: 44)
             }
-            .padding(.horizontal, 18)
-            .piPrimaryButton()
+            .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 28)
     }

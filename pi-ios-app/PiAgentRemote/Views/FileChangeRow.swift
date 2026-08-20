@@ -19,9 +19,9 @@ extension FileChangeType {
     
     var tint: Color {
         switch self {
-        case .added: return PiDesignSystem.Color.diffAdd
-        case .modified: return PiDesignSystem.Color.thinking
-        case .deleted: return PiDesignSystem.Color.diffRemove
+        case .added: return .green
+        case .modified: return .orange
+        case .deleted: return .red
         }
     }
 }
@@ -40,13 +40,13 @@ struct FileChangeRow: View {
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(change.fileName.isEmpty ? change.normalizedPath : change.fileName)
-                    .font(PiDesignSystem.Font.subheadline)
-                    .foregroundStyle(PiDesignSystem.Color.primary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 if !change.parentPath.isEmpty {
                     Text(change.parentPath)
-                        .font(PiDesignSystem.Font.mono)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -57,10 +57,10 @@ struct FileChangeRow: View {
             if change.additions != nil || change.deletions != nil {
                 HStack(spacing: 5) {
                     if let additions = change.additions {
-                        Text("+\(additions)").foregroundStyle(PiDesignSystem.Color.diffAdd)
+                        Text("+\(additions)").foregroundStyle(.green)
                     }
                     if let deletions = change.deletions {
-                        Text("−\(deletions)").foregroundStyle(PiDesignSystem.Color.diffRemove)
+                        Text("−\(deletions)").foregroundStyle(.red)
                     }
                 }
                 .font(.caption.monospacedDigit())
@@ -68,7 +68,7 @@ struct FileChangeRow: View {
             
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(PiDesignSystem.Color.tertiary)
+                .foregroundStyle(.tertiary)
                 .accessibilityHidden(true)
         }
         .frame(minHeight: 44)

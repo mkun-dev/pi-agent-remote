@@ -38,18 +38,18 @@ struct AgentTraceView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(trace.isComplete ? "查看执行过程" : "Pi 正在工作")
-                            .font(PiDesignSystem.Font.subheadline)
-                            .foregroundStyle(PiDesignSystem.Color.primary)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
                         Text("\(trace.operationCount) 个步骤")
-                            .font(PiDesignSystem.Font.caption)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     
                     Spacer(minLength: 8)
                     
                     Image(systemName: "chevron.right")
-                        .font(PiDesignSystem.Font.captionBold)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(trace.isExpanded ? 90 : 0))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: trace.isExpanded)
                         .accessibilityHidden(true)
@@ -64,12 +64,12 @@ struct AgentTraceView: View {
             .accessibilityHint(trace.isExpanded ? "点按收起执行过程" : "点按展开执行过程")
             
             if trace.isExpanded {
-                Divider().overlay(PiDesignSystem.Color.divider).padding(.horizontal, 12)
+                Divider().padding(.horizontal, 12)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(trace.events.enumerated()), id: \.offset) { index, event in
                         TraceEventRow(event: event)
                         if index < trace.events.count - 1 {
-                            Divider().overlay(PiDesignSystem.Color.divider).padding(.leading, 39)
+                            Divider().padding(.leading, 39)
                         }
                     }
                 }
@@ -77,7 +77,12 @@ struct AgentTraceView: View {
                 .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .top)))
             }
         }
-        .piInputSurface(radius: 12)
+        .background(Color(uiColor: .tertiarySystemBackground).opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+        }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: trace.isExpanded)
     }
     
@@ -86,18 +91,18 @@ struct AgentTraceView: View {
         if !trace.isComplete {
             if reduceMotion {
                 Image(systemName: "circle.dotted")
-                    .foregroundStyle(PiDesignSystem.Color.thinking)
+                    .foregroundStyle(Color.orange)
             } else {
                 ProgressView()
                     .scaleEffect(0.7)
-                    .tint(PiDesignSystem.Color.thinking)
+                    .tint(.orange)
             }
         } else if hasFailure {
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(PiDesignSystem.Color.failed)
+                .foregroundStyle(Color.red)
         } else {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(PiDesignSystem.Color.completed)
+                .foregroundStyle(Color.green)
         }
     }
 }
@@ -117,13 +122,13 @@ private struct TraceEventRow: View {
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(event.title)
-                    .font(PiDesignSystem.Font.caption)
-                    .foregroundStyle(event.state == .failed ? PiDesignSystem.Color.failed : PiDesignSystem.Color.primary)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(event.state == .failed ? Color.red : Color.primary)
                 
                 if let detail = event.detail, !detail.isEmpty {
                     Text(detail)
                         .font(detailFont)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
                         .textSelection(.enabled)
@@ -132,10 +137,10 @@ private struct TraceEventRow: View {
                 if event.additions != nil || event.deletions != nil {
                     HStack(spacing: 7) {
                         if let additions = event.additions {
-                            Text("+\(additions)").foregroundStyle(PiDesignSystem.Color.diffAdd)
+                            Text("+\(additions)").foregroundStyle(.green)
                         }
                         if let deletions = event.deletions {
-                            Text("−\(deletions)").foregroundStyle(PiDesignSystem.Color.diffRemove)
+                            Text("−\(deletions)").foregroundStyle(.red)
                         }
                     }
                     .font(.caption2.monospacedDigit())
@@ -187,9 +192,9 @@ private struct TraceEventRow: View {
     
     private var iconColor: Color {
         switch event.state {
-        case .running: return PiDesignSystem.Color.thinking
-        case .succeeded: return event.type == .completed ? PiDesignSystem.Color.completed : PiDesignSystem.Color.secondary
-        case .failed: return PiDesignSystem.Color.failed
+        case .running: return .orange
+        case .succeeded: return event.type == .completed ? .green : .secondary
+        case .failed: return .red
         }
     }
     
@@ -199,21 +204,21 @@ private struct TraceEventRow: View {
         case .running:
             if reduceMotion {
                 Image(systemName: "circle.dotted")
-                    .font(PiDesignSystem.Font.caption2)
-                    .foregroundStyle(PiDesignSystem.Color.thinking)
+                    .font(.caption2)
+                    .foregroundStyle(Color.orange)
             } else {
                 ProgressView()
                     .scaleEffect(0.62)
-                    .tint(PiDesignSystem.Color.thinking)
+                    .tint(.orange)
             }
         case .succeeded:
             Image(systemName: "checkmark.circle.fill")
-                .font(PiDesignSystem.Font.caption)
-                .foregroundStyle(PiDesignSystem.Color.completed)
+                .font(.caption)
+                .foregroundStyle(Color.green)
         case .failed:
             Image(systemName: "xmark.circle.fill")
-                .font(PiDesignSystem.Font.caption)
-                .foregroundStyle(PiDesignSystem.Color.failed)
+                .font(.caption)
+                .foregroundStyle(Color.red)
         }
     }
     

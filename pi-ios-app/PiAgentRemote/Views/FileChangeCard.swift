@@ -13,27 +13,27 @@ struct FileChangeCard: View {
             Button(action: onToggle) {
                 HStack(spacing: 10) {
                     Image(systemName: "doc.on.doc")
-                        .font(PiDesignSystem.Font.subheadline)
-                        .foregroundStyle(PiDesignSystem.Color.accent)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28, height: 28)
-                        .background(PiDesignSystem.Color.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("修改了 \(changes.count) 个文件")
-                            .font(PiDesignSystem.Font.subheadline)
-                            .foregroundStyle(PiDesignSystem.Color.primary)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
                         if let statisticsText {
                             Text(statisticsText)
-                                .font(PiDesignSystem.Font.monoDigit)
-                                .foregroundStyle(PiDesignSystem.Color.secondary)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
                         }
                     }
                     
                     Spacer(minLength: 8)
                     
                     Image(systemName: "chevron.down")
-                        .font(PiDesignSystem.Font.captionBold)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isExpanded)
                 }
@@ -46,7 +46,7 @@ struct FileChangeCard: View {
             .accessibilityHint(isExpanded ? "收起文件列表" : "展开文件列表")
             
             if isExpanded {
-                Divider().overlay(PiDesignSystem.Color.divider).padding(.vertical, 6)
+                Divider().padding(.vertical, 6)
                 VStack(spacing: 2) {
                     ForEach(changes) { change in
                         Button {
@@ -56,7 +56,7 @@ struct FileChangeCard: View {
                         }
                         .buttonStyle(.plain)
                         if change.id != changes.last?.id {
-                            Divider().overlay(PiDesignSystem.Color.divider).padding(.leading, 38)
+                            Divider().padding(.leading, 38)
                         }
                     }
                 }

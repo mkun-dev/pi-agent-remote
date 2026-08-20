@@ -37,28 +37,7 @@ final class ChatScrollController: ObservableObject {
     
     @Published private(set) var followMode: FollowMode = .following
     @Published private(set) var pendingScrollRequest: ScrollRequest?
-
-    /// 聊天窗口默认只展示最近的 N 条消息（P2 长对话窗口裁剪）。
-    /// 用户点“展开”后 revealedAll=true，本会话内显示全部。
-    /// 切会话时由 beginSessionRevision 重置。
-    static let defaultWindowSize: Int = 50
-    @Published private(set) var windowSize: Int = defaultWindowSize
-    @Published private(set) var revealedAll: Bool = false
-
-    /// 裁剪后的可见消息（调用方负责保证输入已过 ChatDisplayFilter）。
-    func windowedMessages(_ allMessages: [Message]) -> (visible: [Message], hiddenCount: Int) {
-        if revealedAll || allMessages.count <= windowSize {
-            return (allMessages, 0)
-        }
-        return (Array(allMessages.suffix(windowSize)), allMessages.count - windowSize)
-    }
-
-    /// 用户点顶部提示条：本会话展开全部历史，不再裁剪。
-    func revealAll() {
-        guard !revealedAll else { return }
-        revealedAll = true
-    }
-
+    
     private(set) var sessionRevision: UInt64 = 0
     private(set) var isAtBottom = true
     private(set) var contentHeight: CGFloat = 0
@@ -86,8 +65,6 @@ final class ChatScrollController: ObservableObject {
         contentHeight = 0
         hasInitialScrollForSession = false
         pendingScrollRequest = nil
-        windowSize = Self.defaultWindowSize
-        revealedAll = false
     }
     
     func handleViewAppear(hasMessages: Bool) {

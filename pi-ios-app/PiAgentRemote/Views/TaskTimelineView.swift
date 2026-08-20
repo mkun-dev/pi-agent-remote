@@ -13,18 +13,14 @@ struct TaskTimelineView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                PiDesignSystem.Color.background.ignoresSafeArea()
-                Group {
-                    if timelineEntries.isEmpty {
-                        emptyState
-                    } else {
-                        timelineScroll
-                    }
+            Group {
+                if timelineEntries.isEmpty {
+                    emptyState
+                } else {
+                    timelineScroll
                 }
             }
             .navigationTitle("任务时间线")
-            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -152,21 +148,18 @@ struct TaskTimelineView: View {
         VStack(spacing: 12) {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 40))
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text("暂无任务时间线")
                 .font(.headline)
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .foregroundStyle(.secondary)
             Text("开始一个 Agent 任务后，这里会显示执行过程的每个步骤。")
                 .font(.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
-        .padding(20)
-        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
         .accessibilityElement(children: .combine)
     }
 }
@@ -226,11 +219,11 @@ private struct TimelineRow: View {
                 VStack(spacing: 0) {
                     timelineIcon
                         .frame(width: 34, height: 34)
-                        .piTintCircle(stateColor, opacity: 0.12)
+                        .background(stateColor.opacity(0.12), in: Circle())
                     
                     if !isLast {
                         Rectangle()
-                            .fill(PiDesignSystem.Color.divider)
+                            .fill(Color.secondary.opacity(0.18))
                             .frame(width: 2)
                             .frame(maxHeight: .infinity)
                             .accessibilityHidden(true)
@@ -242,8 +235,8 @@ private struct TimelineRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(Self.timeFormatter.string(from: entry.timestamp))
-                            .font(PiDesignSystem.Font.monoDigit)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
                         
                         Text(entry.title)
                             .font(.subheadline.weight(.semibold))
@@ -254,10 +247,10 @@ private struct TimelineRow: View {
                         if entry.state == .running {
                             if reduceMotion {
                                 Image(systemName: "circle.dotted")
-                                    .font(PiDesignSystem.Font.caption)
-                                    .foregroundStyle(PiDesignSystem.Color.thinking)
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
                             } else {
-                                ProgressView().scaleEffect(0.6).tint(PiDesignSystem.Color.thinking)
+                                ProgressView().scaleEffect(0.6).tint(.orange)
                             }
                         }
                     }
@@ -265,7 +258,7 @@ private struct TimelineRow: View {
                     if let detail = entry.detail, !detail.isEmpty {
                         Text(detail)
                             .font(detailFont)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(isExpanded ? nil : 2)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -274,10 +267,10 @@ private struct TimelineRow: View {
                     if entry.additions != nil || entry.deletions != nil {
                         HStack(spacing: 8) {
                             if let a = entry.additions {
-                                Text("+\(a)").foregroundStyle(PiDesignSystem.Color.diffAdd).font(PiDesignSystem.Font.monoDigit)
+                                Text("+\(a)").foregroundStyle(.green).font(.caption2.monospacedDigit())
                             }
                             if let d = entry.deletions {
-                                Text("−\(d)").foregroundStyle(PiDesignSystem.Color.diffRemove).font(PiDesignSystem.Font.monoDigit)
+                                Text("−\(d)").foregroundStyle(.red).font(.caption2.monospacedDigit())
                             }
                         }
                     }
@@ -289,7 +282,7 @@ private struct TimelineRow: View {
                             Text(isExpanded ? "收起" : "展开")
                                 .font(.caption2)
                         }
-                        .foregroundStyle(PiDesignSystem.Color.accent)
+                        .foregroundStyle(Color.accentColor)
                         .padding(.top, 2)
                     }
                 }
@@ -339,7 +332,7 @@ private struct TimelineRow: View {
     private var titleColor: Color {
         if entry.state == .failed { return PiDesignSystem.Color.failed }
         if entry.type == .error { return PiDesignSystem.Color.failed }
-        return PiDesignSystem.Color.primary
+        return .primary
     }
     
     private var detailFont: Font {

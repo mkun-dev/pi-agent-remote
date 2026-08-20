@@ -50,8 +50,6 @@ enum ConversationMessageFilter {
             }
         case .media:
             return true       // media.image → 图片消息
-        case .history:
-            return false      // 历史控制事件（如 git 式撤回），只更新状态投影
         case .workspace, .model, .usage, .questionnaire, .relay, .unknown:
             return false      // 系统 / 调试事件，禁止进入聊天
         }
@@ -98,8 +96,6 @@ enum ConversationMessageFilter {
             case .list: return "session.list_result"
             case .switchAcknowledged: return "session.switch_ack"
             }
-        case .history:
-            return "history.rewound"
         case .usage: return "usage.info"
         case .model(let event):
             switch event {

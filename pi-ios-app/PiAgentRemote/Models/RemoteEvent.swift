@@ -40,7 +40,6 @@ struct RemoteEvent: Identifiable, Equatable {
         case tool(RemoteToolEvent)
         case file(RemoteFileEvent)
         case session(RemoteSessionEvent)
-        case history(RemoteHistoryControlEvent)
         case usage(RemoteUsageEvent)
         case model(RemoteModelEvent)
         case questionnaire(RemoteQuestionnaireEvent)
@@ -158,11 +157,6 @@ enum RemoteSessionEvent: Equatable {
     case history(sessionId: String?, entries: [RemoteHistoryEntry])
     case list([RemoteSessionListItem])
     case switchAcknowledged(sessionFile: String?, success: Bool)
-}
-
-/// P4：git 式撤回控制事件。rewoundContent 回填输入框；removedUserMessageCount 表示撤回了倒数 N 条用户消息。
-enum RemoteHistoryControlEvent: Equatable {
-    case rewound(rewoundContent: String, removedUserMessageCount: Int)
 }
 
 struct RemoteUsageEvent: Equatable {

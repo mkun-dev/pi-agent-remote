@@ -22,7 +22,7 @@ struct TypewriterText: View {
             } else {
                 // 打字动画：纯文本逐字 + 闪烁光标（Text + 运算符要求两侧都是 Text）
                 let content: Text = Text(String(full.characters.prefix(count)))
-                    + Text("▍").foregroundColor(PiDesignSystem.Color.thinking)
+                    + Text("▍").foregroundColor(.orange)
                 if timerEnabled {
                     content
                         .onReceive(Timer.publish(every: tickInterval, on: .main, in: .common).autoconnect()) { _ in
@@ -82,7 +82,7 @@ struct StreamingCursor: View {
 
     var body: some View {
         Text("▍")
-            .foregroundStyle(PiDesignSystem.Color.thinking)
+            .foregroundColor(.orange)
             .opacity(reduceMotion ? 1 : (visible ? 1 : 0))
             .accessibilityHidden(true)
             .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in

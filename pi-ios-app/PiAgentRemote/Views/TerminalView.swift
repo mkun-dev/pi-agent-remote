@@ -55,40 +55,36 @@ struct LogsView: View {
     }
     
     var body: some View {
-        ZStack {
-            PiDesignSystem.Color.background.ignoresSafeArea()
-            VStack(spacing: 10) {
+        VStack(spacing: 10) {
             logsHeader
             searchField
             filterPicker
             logsPanel
         }
-            .padding(.top, 8)
-        }
-        .background(PiDesignSystem.Color.background)
+        .padding(.top, 8)
+        .background(Color(uiColor: .systemBackground))
         .navigationTitle("执行日志")
-        .preferredColorScheme(.dark)
         .navigationBarTitleDisplayMode(.inline)
     }
     
     private var logsHeader: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(store.agentState.isWorking ? PiDesignSystem.Color.completed : PiDesignSystem.Color.secondary.opacity(0.45))
+                .fill(store.agentState.isWorking ? Color.green : Color.secondary.opacity(0.45))
                 .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("只读执行日志")
                     .font(.caption.weight(.semibold))
                 Text("\(store.logs.count) / 5000 条")
-                    .font(PiDesignSystem.Font.monoDigit)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             if store.agentState.isWorking {
                 Label("运行中", systemImage: "circle.dotted")
-                    .font(PiDesignSystem.Font.caption2)
-                    .foregroundStyle(PiDesignSystem.Color.completed)
+                    .font(.caption2)
+                    .foregroundStyle(Color.green)
             }
             Button {
                 copyVisibleLogs()
@@ -98,18 +94,17 @@ struct LogsView: View {
                     .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(copied ? PiDesignSystem.Color.completed : PiDesignSystem.Color.accent)
+            .foregroundStyle(copied ? Color.green : Color.accentColor)
             .disabled(filteredEntries.isEmpty)
             .accessibilityLabel("复制当前筛选的日志")
         }
         .padding(.horizontal, 16)
-        .padding(.top, 4)
     }
     
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             TextField("搜索命令、文件或错误", text: $searchText)
                 .textInputAutocapitalization(.never)
@@ -120,7 +115,7 @@ struct LogsView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -130,7 +125,7 @@ struct LogsView: View {
         .padding(.leading, 12)
         .padding(.trailing, searchText.isEmpty ? 12 : 0)
         .frame(minHeight: 44)
-        .piInputSurface()
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .padding(.horizontal, 12)
     }
     
@@ -152,14 +147,14 @@ struct LogsView: View {
                     VStack(spacing: 10) {
                         Image(systemName: searchText.isEmpty ? "doc.text.magnifyingglass" : "magnifyingglass")
                             .font(.title2)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .foregroundStyle(Color.gray)
                         Text(searchText.isEmpty ? "还没有执行日志" : "没有匹配的日志")
-                            .font(PiDesignSystem.Font.subheadline)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.gray)
                         if !searchText.isEmpty {
                             Text("尝试搜索工具名称、命令、文件路径或错误内容。")
-                                .font(PiDesignSystem.Font.caption)
-                                .foregroundStyle(PiDesignSystem.Color.secondary.opacity(0.8))
+                                .font(.caption)
+                                .foregroundStyle(Color.gray.opacity(0.8))
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -193,7 +188,8 @@ struct LogsView: View {
                 }
             }
         }
-        .piCard(color: PiDesignSystem.Color.surface, radius: 14)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
     }
@@ -247,23 +243,23 @@ private struct LogEntryRow: View {
                     .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
                 Text(Self.timeFormatter.string(from: entry.timestamp))
-                    .font(PiDesignSystem.Font.monoDigit)
-                    .foregroundStyle(PiDesignSystem.Color.tertiary)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(Color.gray)
                 Text(typeLabel)
                     .font(.caption2.weight(.bold).monospaced())
                     .foregroundStyle(levelColor)
                 Text(entry.title)
                     .font(.caption.weight(.semibold).monospaced())
-                    .foregroundStyle(PiDesignSystem.Color.primary)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if entry.isRunning {
                     if reduceMotion {
                         Image(systemName: "circle.dotted")
                             .font(.caption)
-                            .foregroundStyle(PiDesignSystem.Color.thinking)
+                            .foregroundStyle(Color.orange)
                     } else {
-                        ProgressView().scaleEffect(0.58).tint(PiDesignSystem.Color.thinking)
+                        ProgressView().scaleEffect(0.58).tint(.orange)
                     }
                 }
             }
@@ -271,7 +267,7 @@ private struct LogEntryRow: View {
             if !entry.content.isEmpty {
                 Text(displayedContent)
                     .font(.system(.footnote, design: .monospaced))
-                    .foregroundStyle(entry.level == .error ? PiDesignSystem.Color.failed.opacity(0.9) : PiDesignSystem.Color.completed.opacity(0.82))
+                    .foregroundStyle(entry.level == .error ? Color.red.opacity(0.9) : Color.green.opacity(0.82))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -280,8 +276,8 @@ private struct LogEntryRow: View {
             if isLong {
                 HStack(spacing: 8) {
                     Text("\(entry.lineCount) 行")
-                        .font(PiDesignSystem.Font.monoDigit)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(Color.gray)
                     Button(isExpanded ? "收起" : "查看完整输出") {
                         if reduceMotion {
                             isExpanded.toggle()
@@ -291,16 +287,16 @@ private struct LogEntryRow: View {
                             }
                         }
                     }
-                    .font(PiDesignSystem.Font.captionBold)
+                    .font(.caption.weight(.semibold))
                     .frame(minWidth: 44, minHeight: 44)
                     .buttonStyle(.plain)
-                    .foregroundStyle(PiDesignSystem.Color.accent)
+                    .foregroundStyle(Color.blue)
                     .accessibilityHint(isExpanded ? "折叠长日志" : "展开完整长日志")
                 }
             }
         }
         .padding(10)
-        .background(PiDesignSystem.Color.panelElevated, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(levelColor.opacity(0.22), lineWidth: 1)
@@ -329,10 +325,10 @@ private struct LogEntryRow: View {
     
     private var levelColor: Color {
         switch entry.level {
-        case .info: return PiDesignSystem.Color.accent
-        case .success: return PiDesignSystem.Color.completed
-        case .warning: return PiDesignSystem.Color.thinking
-        case .error: return PiDesignSystem.Color.failed
+        case .info: return .blue
+        case .success: return .green
+        case .warning: return .orange
+        case .error: return .red
         }
     }
 }

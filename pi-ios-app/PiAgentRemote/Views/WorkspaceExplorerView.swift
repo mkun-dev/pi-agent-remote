@@ -42,20 +42,16 @@ struct WorkspaceExplorerView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                PiDesignSystem.Color.background.ignoresSafeArea()
-                Group {
-                    if !isConnected {
-                        offlineView
-                    } else if store.workspaceChildren.isEmpty && loadedRoots.isEmpty {
-                        loadingView
-                    } else {
-                        explorerContent
-                    }
+            Group {
+                if !isConnected {
+                    offlineView
+                } else if store.workspaceChildren.isEmpty && loadedRoots.isEmpty {
+                    loadingView
+                } else {
+                    explorerContent
                 }
             }
             .navigationTitle("Workspace")
-            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -79,8 +75,8 @@ struct WorkspaceExplorerView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                         Text("加载 \(node.name)...")
-                            .font(PiDesignSystem.Font.caption)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .navigationTitle(node.name)
@@ -134,7 +130,6 @@ struct WorkspaceExplorerView: View {
                 treeSection
             }
         }
-        .scrollContentBackground(.hidden)
         .listStyle(.insetGrouped)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: expandedDirs)
     }
@@ -154,23 +149,23 @@ struct WorkspaceExplorerView: View {
                                     .frame(width: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(change.fileName)
-                                        .font(PiDesignSystem.Font.subheadline)
-                                        .foregroundStyle(PiDesignSystem.Color.primary)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
                                         .lineLimit(1)
                                     Text(change.path)
-                                        .font(PiDesignSystem.Font.monoDigit)
-                                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 4)
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(change.timestamp, style: .relative)
-                                        .font(PiDesignSystem.Font.caption2)
-                                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                     if change.additions != nil || change.deletions != nil {
                                         Text("+\(change.additions ?? 0) −\(change.deletions ?? 0)")
-                                            .font(PiDesignSystem.Font.monoDigit)
-                                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -212,9 +207,9 @@ struct WorkspaceExplorerView: View {
     
     private func recentChangeColor(_ type: FileChangeType) -> Color {
         switch type {
-        case .added: return PiDesignSystem.Color.diffAdd
-        case .modified: return PiDesignSystem.Color.thinking
-        case .deleted: return PiDesignSystem.Color.diffRemove
+        case .added: return .green
+        case .modified: return .orange
+        case .deleted: return .red
         }
     }
     
@@ -234,13 +229,13 @@ struct WorkspaceExplorerView: View {
                 HStack(spacing: 10) {
                     ProgressView()
                     Text("加载中...")
-                        .font(PiDesignSystem.Font.caption)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else if rootNodes.isEmpty {
                 Text("空目录")
-                    .font(PiDesignSystem.Font.caption)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 ForEach(rootNodes) { node in
                     nodeRow(node, depth: 0)
@@ -260,13 +255,13 @@ struct WorkspaceExplorerView: View {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
                     Text("搜索整个项目...")
-                        .font(PiDesignSystem.Font.caption)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else if results.isEmpty {
                 Text("无匹配文件")
-                    .font(PiDesignSystem.Font.caption)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 ForEach(results) { node in
                     Button {
@@ -278,15 +273,15 @@ struct WorkspaceExplorerView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(node.name)
-                                        .foregroundStyle(PiDesignSystem.Color.primary)
+                                        .foregroundStyle(.primary)
                                     if let type = node.type == .file ? store.latestChangeType(for: node.path) : nil {
                                         FileStatusDot(type: type)
                                     }
                                 }
                                 if !node.path.isEmpty && node.path != node.name {
                                     Text(node.path)
-                                        .font(PiDesignSystem.Font.caption2)
-                                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
                             }
@@ -397,10 +392,10 @@ struct WorkspaceExplorerView: View {
     private func emptyRow(depth: Int) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "square.dashed")
-                .foregroundStyle(PiDesignSystem.Color.tertiary)
+                .foregroundStyle(.tertiary)
             Text("空目录")
-                .font(PiDesignSystem.Font.caption)
-                .foregroundStyle(PiDesignSystem.Color.tertiary)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .padding(.leading, CGFloat(16 + depth * 20) + 8)
     }
@@ -411,8 +406,8 @@ struct WorkspaceExplorerView: View {
             ProgressView()
                 .controlSize(.small)
             Text("加载中...")
-                .font(PiDesignSystem.Font.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.leading, CGFloat(16 + depth * 20) + 8)
     }
@@ -420,8 +415,8 @@ struct WorkspaceExplorerView: View {
     /// 错误提示行
     private func errorRow(_ message: String, depth: Int) -> some View {
         Text("⚠️ \(message)")
-            .font(PiDesignSystem.Font.caption)
-            .foregroundStyle(PiDesignSystem.Color.failed)
+            .font(.caption)
+            .foregroundStyle(.red)
             .padding(.leading, CGFloat(16 + depth * 20) + 8)
     }
     
@@ -433,14 +428,14 @@ struct WorkspaceExplorerView: View {
             Circle()
                 .fill(color)
                 .frame(width: 8, height: 8)
-                .overlay(Circle().stroke(PiDesignSystem.Color.border, lineWidth: 0.5))
+                .overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
                 .accessibilityLabel(label)
         }
         private var color: Color {
             switch type {
-            case .added: return PiDesignSystem.Color.diffAdd
-            case .modified: return PiDesignSystem.Color.thinking
-            case .deleted: return PiDesignSystem.Color.diffRemove
+            case .added: return .green
+            case .modified: return .orange
+            case .deleted: return .red
             }
         }
         private var label: String {
@@ -465,7 +460,7 @@ struct WorkspaceExplorerView: View {
                     Image(systemName: "folder" + (isExpanded ? ".fill" : ""))
                         .foregroundStyle(PiDesignSystem.Color.thinking)
                     Text(node.name)
-                        .foregroundStyle(PiDesignSystem.Color.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     Spacer()
                     if isLoading {
@@ -474,11 +469,11 @@ struct WorkspaceExplorerView: View {
                     } else if isExpanded {
                         Image(systemName: "chevron.down")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .foregroundStyle(.secondary)
                     } else {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(PiDesignSystem.Color.tertiary)
+                            .foregroundStyle(.tertiary)
                     }
                 }
                 .padding(.leading, CGFloat(depth * 20))
@@ -501,7 +496,7 @@ struct WorkspaceExplorerView: View {
                     Image(systemName: fileIcon(node.name))
                         .foregroundStyle(PiDesignSystem.Color.tool)
                     Text(node.name)
-                        .foregroundStyle(PiDesignSystem.Color.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     if let changeType {
                         FileStatusDot(type: changeType)
@@ -509,7 +504,7 @@ struct WorkspaceExplorerView: View {
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(PiDesignSystem.Color.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
                 .padding(.leading, CGFloat(depth * 20))
             }
@@ -650,30 +645,24 @@ struct WorkspaceExplorerView: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 40))
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
             Text("未连接到 Pi")
                 .font(.headline)
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .foregroundStyle(.secondary)
             Text("连接后在电脑上查看项目文件。")
                 .font(.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
         }
-        .padding(20)
-        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
-        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var loadingView: some View {
         VStack(spacing: 12) {
-            ProgressView().tint(PiDesignSystem.Color.accent)
+            ProgressView()
             Text("加载项目目录...")
                 .font(.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
         }
-        .padding(20)
-        .piCard(color: PiDesignSystem.Color.surface, radius: 20)
-        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

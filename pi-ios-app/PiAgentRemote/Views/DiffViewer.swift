@@ -22,10 +22,9 @@ struct DiffViewer: View {
                     diffPreview
                 }
             }
-            .background(PiDesignSystem.Color.background)
+            .background(Color(uiColor: .systemBackground))
             .navigationTitle(change.fileName)
             .navigationBarTitleDisplayMode(.inline)
-            .preferredColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
@@ -63,12 +62,12 @@ struct DiffViewer: View {
                 .padding(.top, 24)
             
             Text(change.fileName)
-                .font(PiDesignSystem.Font.headline)
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
             
             Text(change.normalizedPath)
-                .font(PiDesignSystem.Font.mono)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .padding(.horizontal, 16)
                 .multilineTextAlignment(.center)
@@ -83,7 +82,7 @@ struct DiffViewer: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-            .piTintCapsule(change.type.tint, opacity: 0.1)
+            .background(change.type.tint.opacity(0.1), in: Capsule())
         }
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
@@ -94,8 +93,8 @@ struct DiffViewer: View {
     private var changeStats: some View {
         VStack(spacing: 12) {
             Text("变更摘要")
-                .font(PiDesignSystem.Font.captionBold)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -106,7 +105,7 @@ struct DiffViewer: View {
                         icon: "plus.circle.fill",
                         label: "新增",
                         value: "+\(additions) 行",
-                        color: PiDesignSystem.Color.diffAdd
+                        color: .green
                     )
                 }
                 if let deletions = change.deletions, deletions > 0 {
@@ -114,7 +113,7 @@ struct DiffViewer: View {
                         icon: "minus.circle.fill",
                         label: "删除",
                         value: "−\(deletions) 行",
-                        color: PiDesignSystem.Color.diffRemove
+                        color: .red
                     )
                 }
                 if change.additions == nil && change.deletions == nil {
@@ -138,11 +137,11 @@ struct DiffViewer: View {
                 .font(.title3)
                 .foregroundStyle(color)
             Text(value)
-                .font(PiDesignSystem.Font.subheadline.monospacedDigit())
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(.primary)
             Text(label)
-                .font(PiDesignSystem.Font.caption2)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .frame(minWidth: 70)
         .padding(.vertical, 10)
@@ -155,8 +154,8 @@ struct DiffViewer: View {
     private var diffPreview: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("变更预览")
-                .font(PiDesignSystem.Font.captionBold)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             
@@ -168,10 +167,10 @@ struct DiffViewer: View {
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 11))
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                     Text("完整 diff 请在 PC 端查看")
-                        .font(PiDesignSystem.Font.caption2)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 16)
             }
@@ -190,7 +189,7 @@ struct DiffViewer: View {
                     // Hunk header
                     Text("@@ −\(hunk.oldStart) +\(hunk.newStart) @@")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 12)
                     
@@ -202,7 +201,7 @@ struct DiffViewer: View {
             .padding(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .piInputSurface(radius: 12)
+        .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.horizontal, 16)
     }
     
@@ -212,7 +211,7 @@ struct DiffViewer: View {
             if let oldLine = line.oldLine {
                 Text("\(oldLine)")
                     .frame(width: 32, alignment: .trailing)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("")
                     .frame(width: 32)
@@ -220,7 +219,7 @@ struct DiffViewer: View {
             if let newLine = line.newLine {
                 Text("\(newLine)")
                     .frame(width: 32, alignment: .trailing)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("")
                     .frame(width: 32)
@@ -228,11 +227,11 @@ struct DiffViewer: View {
             
             // 符号 + 内容
             Text(line.type == .added ? "+" : (line.type == .removed ? "−" : " "))
-                .foregroundStyle(line.type == .added ? PiDesignSystem.Color.diffAdd : (line.type == .removed ? PiDesignSystem.Color.diffRemove : PiDesignSystem.Color.secondary))
+                .foregroundStyle(line.type == .added ? .green : (line.type == .removed ? .red : .secondary))
                 .frame(width: 12, alignment: .center)
             
             Text(line.content)
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .foregroundStyle(.primary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: true, vertical: false)
         }
@@ -256,36 +255,36 @@ struct DiffViewer: View {
     private var simulatedDiffView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("变更预览")
-                .font(PiDesignSystem.Font.captionBold)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             
             VStack(alignment: .leading, spacing: 0) {
                 switch change.type {
                 case .added:
-                    diffBlock(symbol: "+", lines: previewAddLines, color: PiDesignSystem.Color.diffAdd)
+                    diffBlock(symbol: "+", lines: previewAddLines, color: .green)
                 case .deleted:
-                    diffBlock(symbol: "−", lines: previewDelLines, color: PiDesignSystem.Color.diffRemove)
+                    diffBlock(symbol: "−", lines: previewDelLines, color: .red)
                 case .modified:
-                    diffBlock(symbol: "−", lines: previewDelLines, color: PiDesignSystem.Color.diffRemove)
-                    diffBlock(symbol: "+", lines: previewAddLines, color: PiDesignSystem.Color.diffAdd)
+                    diffBlock(symbol: "−", lines: previewDelLines, color: .red)
+                    diffBlock(symbol: "+", lines: previewAddLines, color: .green)
                 }
             }
             .font(.system(.caption, design: .monospaced))
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .piInputSurface(radius: 12)
+            .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.horizontal, 16)
             
             // 提示
             HStack(spacing: 6) {
                 Image(systemName: "info.circle")
                     .font(.system(size: 11))
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .foregroundStyle(.secondary)
                 Text("完整 diff 请在 PC 端查看")
-                    .font(PiDesignSystem.Font.caption2)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
@@ -301,13 +300,13 @@ struct DiffViewer: View {
                         .foregroundStyle(color)
                         .frame(width: 12, alignment: .center)
                     Text(lines[index])
-                        .foregroundStyle(PiDesignSystem.Color.primary)
+                        .foregroundStyle(.primary)
                         .textSelection(.enabled)
                 }
             }
         }
         if !lines.isEmpty && lines != previewDelLines {
-            Divider().overlay(PiDesignSystem.Color.divider).padding(.vertical, 4).opacity(0.3)
+            Divider().padding(.vertical, 4).opacity(0.3)
         }
     }
     

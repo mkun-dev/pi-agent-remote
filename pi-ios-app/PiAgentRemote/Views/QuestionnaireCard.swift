@@ -19,92 +19,86 @@ struct QuestionnaireCard: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                PiDesignSystem.Color.background
-                    .ignoresSafeArea()
-                VStack(spacing: 0) {
-                    HStack(spacing: 6) {
-                        ForEach(Array(questions.enumerated()), id: \.offset) { idx, _ in
-                            Capsule()
-                                .fill(idx < currentIndex ? PiDesignSystem.Color.completed : (idx == currentIndex ? PiDesignSystem.Color.accent : PiDesignSystem.Color.border))
-                                .frame(width: idx == currentIndex ? 20 : 8, height: 8)
-                        }
-                        Spacer()
-                        Text("\(currentIndex + 1)/\(questions.count)")
-                            .font(PiDesignSystem.Font.caption)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+            VStack(spacing: 0) {
+                // 进度指示器
+                HStack(spacing: 6) {
+                    ForEach(Array(questions.enumerated()), id: \.offset) { idx, q in
+                        Circle()
+                            .fill(idx < currentIndex ? Color.green : (idx == currentIndex ? Color.blue : Color.gray.opacity(0.3)))
+                            .frame(width: 8, height: 8)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    
-                    if let q = currentQuestion {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text(q.question ?? "")
-                                    .font(PiDesignSystem.Font.headline)
-                                    .foregroundStyle(PiDesignSystem.Color.primary)
-                                
-                                if q.multiSelect == true {
-                                    Text("多选")
-                                        .font(PiDesignSystem.Font.caption)
-                                        .foregroundStyle(PiDesignSystem.Color.accent)
-                                }
+                    Spacer()
+                    Text("\(currentIndex + 1)/\(questions.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                
+                if let q = currentQuestion {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(q.question ?? "")
+                            .font(.headline)
+                            .padding(.horizontal)
                         
-                                ForEach(q.options ?? []) { opt in
-                                    Button {
-                                        selectOption(for: q, option: opt)
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: isSelected(q, opt) ? "checkmark.circle.fill" : "circle")
-                                                .foregroundStyle(isSelected(q, opt) ? PiDesignSystem.Color.accent : PiDesignSystem.Color.secondary)
-                                                .font(.system(size: 20))
-                                            
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(opt.label ?? "")
-                                                    .font(PiDesignSystem.Font.body)
-                                                    .foregroundStyle(PiDesignSystem.Color.primary)
-                                                if let desc = opt.description {
-                                                    Text(desc)
-                                                        .font(PiDesignSystem.Font.caption)
-                                                        .foregroundStyle(PiDesignSystem.Color.secondary)
-                                                }
-                                            }
-                                            Spacer()
-                                        }
-                                        .padding(.vertical, 10)
-                                        .padding(.horizontal, 12)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(PiDesignSystem.Color.panelElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(isSelected(q, opt) ? PiDesignSystem.Color.accent.opacity(0.5) : PiDesignSystem.Color.border, lineWidth: 1))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                        if q.multiSelect == true {
+                            Text("多选")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                                .padding(.horizontal)
+                        }
                         
-                                if customInputFor == q.id {
-                                    VStack(spacing: 10) {
-                                        TextField("输入自定义答案...", text: $customText)
-                                            .textInputAutocapitalization(.never)
-                                            .autocorrectionDisabled()
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 12)
-                                            .piInputSurface()
-                                        HStack(spacing: 10) {
-                                            Button("确定") {
-                                                saveCustomInput(for: q)
-                                            }
-                                            .frame(maxWidth: .infinity, minHeight: 40)
-                                            .piPrimaryButton(radius: 12)
-                                            .disabled(customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                            
-                                            Button("取消") {
-                                                customInputFor = nil
-                                                customText = ""
-                                            }
-                                            .frame(maxWidth: .infinity, minHeight: 40)
-                                            .piSecondaryButton(radius: 12)
+                        // 选项列表
+                        ForEach(q.options ?? []) { opt in
+                            Button {
+                                selectOption(for: q, option: opt)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: isSelected(q, opt) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(isSelected(q, opt) ? .blue : .gray)
+                                        .font(.system(size: 20))
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(opt.label ?? "")
+                                            .font(.body)
+                                            .foregroundColor(.primary)
+                                        if let desc = opt.description {
+                                            Text(desc)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
                                     }
-                                } else {
+                                    Spacer()
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
+                        // 自定义输入（SwiftUI 原生内联，替代不可靠的 UIAlertController）
+                        if customInputFor == q.id {
+                            HStack(spacing: 8) {
+                                TextField("输入自定义答案...", text: $customText)
+                                    .textFieldStyle(.roundedBorder)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+                                Button("确定") {
+                                    saveCustomInput(for: q)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .disabled(customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                Button("取消") {
+                                    customInputFor = nil
+                                    customText = ""
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+                        } else {
                             Button {
                                 customInputFor = q.id
                                 customText = customAnswer(for: q) ?? ""
@@ -112,81 +106,74 @@ struct QuestionnaireCard: View {
                                 if let savedAnswer = customAnswer(for: q) {
                                     HStack(alignment: .top, spacing: 10) {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(PiDesignSystem.Color.accent)
+                                            .foregroundColor(.blue)
                                             .padding(.top, 2)
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text("自定义答案")
-                                                .font(PiDesignSystem.Font.caption)
-                                                .foregroundStyle(PiDesignSystem.Color.secondary)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                             Text(savedAnswer)
-                                                .font(PiDesignSystem.Font.body)
-                                                .foregroundStyle(PiDesignSystem.Color.primary)
+                                                .font(.body)
+                                                .foregroundColor(.primary)
                                                 .multilineTextAlignment(.leading)
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
                                         Spacer(minLength: 8)
                                         Image(systemName: "pencil")
-                                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                                            .foregroundColor(.secondary)
                                             .padding(.top, 2)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 10)
                                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                    .piInputSurface()
+                                    .background(Color.blue.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .padding(.horizontal)
                                 } else {
                                     HStack {
                                         Image(systemName: "pencil")
                                         Text("输入自定义答案...")
                                     }
-                                    .font(PiDesignSystem.Font.body)
-                                    .foregroundStyle(PiDesignSystem.Color.secondary)
-                                    .padding(.horizontal, 12)
-                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                    .piInputSurface()
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal)
+                                    .frame(minHeight: 44)
                                 }
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(customAnswer(for: q).map { "自定义答案：\($0)，点按可编辑" } ?? "输入自定义答案")
                         }
-                            }
-                            .padding(16)
-                            .piCard(color: PiDesignSystem.Color.surface)
-                            .padding(16)
-                        }
                     }
-                    
-                    Spacer()
-                    
-                    HStack {
-                        if currentIndex > 0 {
-                            Button("上一步") { currentIndex -= 1 }
-                                .frame(minWidth: 88, minHeight: 44)
-                                .piSecondaryButton()
-                        }
-                        Spacer()
-                        if currentIndex < questions.count - 1 {
-                            Button("下一步") { currentIndex += 1 }
-                                .frame(minWidth: 88, minHeight: 44)
-                                .piPrimaryButton()
-                        } else {
-                            Button("提交") {
-                                submitAnswers()
-                            }
-                            .frame(minWidth: 88, minHeight: 44)
-                            .piPrimaryButton()
-                            .disabled(answers.isEmpty)
-                            .opacity(answers.isEmpty ? 0.55 : 1)
-                        }
-                    }
-                    .padding(16)
+                    .padding(.vertical)
                 }
+                
+                Spacer()
+                
+                // 底部按钮
+                HStack {
+                    if currentIndex > 0 {
+                        Button("上一步") { currentIndex -= 1 }
+                            .buttonStyle(.bordered)
+                    }
+                    Spacer()
+                    if currentIndex < questions.count - 1 {
+                        Button("下一步") { currentIndex += 1 }
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button("提交") {
+                            submitAnswers()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(answers.isEmpty)
+                    }
+                }
+                .padding()
             }
             .navigationTitle("模型提问")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { onDismiss() }
-                        .tint(PiDesignSystem.Color.accent)
                 }
             }
         }

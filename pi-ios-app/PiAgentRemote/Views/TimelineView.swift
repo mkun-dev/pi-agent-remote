@@ -54,31 +54,26 @@ struct ActivityView: View {
                 }
             }
         }
-        .background(PiDesignSystem.Color.background)
         .navigationTitle("活动")
         .navigationBarTitleDisplayMode(.inline)
-        .preferredColorScheme(.dark)
     }
     
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 40))
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text("还没有活动")
-                .font(PiDesignSystem.Font.headline)
-                .foregroundStyle(PiDesignSystem.Color.primary)
+                .font(.headline)
+                .foregroundStyle(.secondary)
             Text("与 Pi 对话后，这里会展示请求、工具、文件变化和完成摘要。")
-                .font(PiDesignSystem.Font.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
-        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .piCard(color: PiDesignSystem.Color.surface)
-        .padding(16)
         .accessibilityElement(children: .combine)
     }
 }
@@ -102,10 +97,10 @@ private struct ActivityRow: View {
             VStack(spacing: 0) {
                 eventIcon
                     .frame(width: 32, height: 32)
-                    .piTintCircle(eventColor, opacity: 0.12)
+                    .background(eventColor.opacity(0.12), in: Circle())
                 if !isLast {
                     Rectangle()
-                        .fill(PiDesignSystem.Color.divider)
+                        .fill(Color.secondary.opacity(0.2))
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                         .accessibilityHidden(true)
@@ -116,19 +111,19 @@ private struct ActivityRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(Self.timeFormatter.string(from: event.timestamp))
-                        .font(PiDesignSystem.Font.monoDigit)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
                     Text(event.title)
-                        .font(PiDesignSystem.Font.subheadline)
-                        .foregroundStyle(event.type == .error ? PiDesignSystem.Color.failed : PiDesignSystem.Color.primary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(event.type == .error ? Color.red : Color.primary)
                     Spacer(minLength: 4)
                     if event.isRunning {
                         if reduceMotion {
                             Image(systemName: "circle.dotted")
-                                .font(PiDesignSystem.Font.caption)
-                                .foregroundStyle(PiDesignSystem.Color.thinking)
+                                .font(.caption)
+                                .foregroundStyle(Color.orange)
                         } else {
-                            ProgressView().scaleEffect(0.62).tint(PiDesignSystem.Color.thinking)
+                            ProgressView().scaleEffect(0.62).tint(.orange)
                         }
                     }
                 }
@@ -136,7 +131,7 @@ private struct ActivityRow: View {
                 if let detail = event.detail, !detail.isEmpty {
                     Text(detail)
                         .font(detailFont)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(isExpanded ? nil : 3)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -151,10 +146,10 @@ private struct ActivityRow: View {
                                 }
                             }
                         }
-                        .font(PiDesignSystem.Font.captionBold)
+                        .font(.caption.weight(.semibold))
                         .frame(minWidth: 44, minHeight: 44, alignment: .leading)
                         .buttonStyle(.plain)
-                        .foregroundStyle(PiDesignSystem.Color.accent)
+                        .foregroundStyle(Color.accentColor)
                         .accessibilityHint(isExpanded ? "收起活动详情" : "展开完整活动详情")
                     }
                 }
@@ -162,10 +157,10 @@ private struct ActivityRow: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PiDesignSystem.Color.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(PiDesignSystem.Color.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
             }
             .padding(.bottom, isLast ? 0 : 12)
         }
@@ -197,12 +192,12 @@ private struct ActivityRow: View {
     
     private var eventColor: Color {
         switch event.type {
-        case .userRequest: return PiDesignSystem.Color.accent
-        case .thinking: return PiDesignSystem.Color.thinking
-        case .toolExecution: return PiDesignSystem.Color.tool
-        case .fileChange: return PiDesignSystem.Color.streaming
-        case .completed: return PiDesignSystem.Color.completed
-        case .error: return PiDesignSystem.Color.failed
+        case .userRequest: return .blue
+        case .thinking: return .orange
+        case .toolExecution: return .purple
+        case .fileChange: return .indigo
+        case .completed: return .green
+        case .error: return .red
         }
     }
     

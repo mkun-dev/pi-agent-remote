@@ -72,9 +72,7 @@ struct FileViewerView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                PiDesignSystem.Color.background.ignoresSafeArea()
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                 if supportsSearch, (!searchText.isEmpty || isSearchFocused) {
                     searchBar
                         .padding(.horizontal, 12)
@@ -82,10 +80,8 @@ struct FileViewerView: View {
                 }
                 viewerBody
             }
-                .background(PiDesignSystem.Color.background)
-            }
+            .background(PiDesignSystem.Color.background)
             .navigationTitle(file.fileName)
-            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -175,8 +171,8 @@ struct FileViewerView: View {
                 fileMetaHeader
                 if textContent.isEmpty {
                     Text("空文件")
-                        .font(PiDesignSystem.Font.caption)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .padding()
                 } else if !searchText.isEmpty && !matchRanges.isEmpty {
                     highlightedText
@@ -198,8 +194,8 @@ struct FileViewerView: View {
                 fileMetaHeader
                 if textContent.isEmpty {
                     Text("空文件")
-                        .font(PiDesignSystem.Font.caption)
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
                 } else {
                     MarkdownContent(messageID: "workspace:\(path)", markdown: textContent)
@@ -220,7 +216,11 @@ struct FileViewerView: View {
                 } else {
                     SVGPreviewView(svgContent: textContent)
                         .frame(height: 320)
-                        .piPreviewClip(radius: 14)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
                         .padding(.horizontal, 12)
                 }
             }
@@ -240,7 +240,11 @@ struct FileViewerView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: .infinity)
-                        .piPreviewClip(radius: 14)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
                         .padding(.horizontal, 12)
                 } else if imageLoadFailed {
                     unsupportedPreviewView(title: "图片加载失败", detail: "文件已识别为图片，但解码失败。")
@@ -248,8 +252,8 @@ struct FileViewerView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                         Text("加载图片预览...")
-                            .font(PiDesignSystem.Font.caption)
-                            .foregroundStyle(PiDesignSystem.Color.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
@@ -275,25 +279,23 @@ struct FileViewerView: View {
         VStack(spacing: 12) {
             Image(systemName: currentKind == .image || currentKind == .svg ? "photo" : "doc.badge.questionmark")
                 .font(.system(size: 42))
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
             Text(title)
                 .font(.headline)
-                .foregroundStyle(PiDesignSystem.Color.primary)
             Text(detail)
                 .font(.caption)
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .piCard(color: PiDesignSystem.Color.surface, radius: 18)
     }
     
     private var fileMetaHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(path)
                 .font(.caption.monospaced())
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10, alignment: .leading)], alignment: .leading, spacing: 8) {
@@ -325,11 +327,11 @@ struct FileViewerView: View {
     
     private func metaPill(systemImage: String, text: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(PiDesignSystem.Font.caption2)
-            .foregroundStyle(PiDesignSystem.Color.secondary)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .piTintCapsule(PiDesignSystem.Color.secondary, opacity: 0.08)
+            .background(Color.secondary.opacity(0.08), in: Capsule())
     }
     
     private var effectiveMimeType: String? {
@@ -369,7 +371,7 @@ struct FileViewerView: View {
     private var searchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(PiDesignSystem.Color.secondary)
+                .foregroundStyle(.secondary)
             TextField("搜索文件内容", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -383,14 +385,14 @@ struct FileViewerView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(PiDesignSystem.Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .accessibilityLabel("清除搜索")
             }
             if !matchRanges.isEmpty {
                 Text("\(currentMatchIndex + 1)/\(matchRanges.count)")
-                    .font(PiDesignSystem.Font.monoDigit)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 Button {
                     cycleMatch(forward: true)
                 } label: {
@@ -407,7 +409,7 @@ struct FileViewerView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .piInputSurface(radius: 20)
+        .piCard()
     }
     
     private var highlightedText: some View {
@@ -490,7 +492,7 @@ struct FileViewerView: View {
         let selection = (supportsSearch && !searchText.isEmpty) ? "搜索: \(searchText)" : nil
         viewModel.conversationStore.setPendingFileContext(files: [path], selection: selection)
         viewModel.inputText = "关于 \(file.fileName)："
-        viewModel.activeTab = 1   // tab 索引：0=首页 1=聊天
+        viewModel.activeTab = 0
         dismiss()
     }
     
@@ -499,7 +501,7 @@ struct FileViewerView: View {
         guard let viewModel else { return }
         viewModel.conversationStore.clearPendingFileContext()
         viewModel.inputText = "参考文件：\(path)\n"
-        viewModel.activeTab = 1   // tab 索引：0=首页 1=聊天
+        viewModel.activeTab = 0
         dismiss()
     }
 }

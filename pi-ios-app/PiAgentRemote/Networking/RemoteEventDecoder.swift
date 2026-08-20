@@ -135,11 +135,6 @@ enum RemoteEventDecoder {
                 sessionFile: value.sessionFile,
                 success: value.ok == true
             ))
-        case "history.rewound":
-            return .history(.rewound(
-                rewoundContent: value.text ?? "",
-                removedUserMessageCount: value.removedMessageCount ?? 1
-            ))
         case "usage.info":
             return .usage(RemoteUsageEvent(
                 model: value.model,

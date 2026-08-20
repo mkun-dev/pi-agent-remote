@@ -7,7 +7,6 @@ import Foundation
 final class ConversationStore: ObservableObject {
     @Published private(set) var isConnected = false
     @Published private(set) var connectionStatus: String = "已断开"
-    @Published private(set) var connectionSnapshot = ConnectionStatusSnapshot()
     @Published private(set) var isAgentOnline = true
     @Published private(set) var messages: [Message] = []
     @Published private(set) var currentTrace: AgentTrace?
@@ -30,8 +29,6 @@ final class ConversationStore: ObservableObject {
     @Published private(set) var usageInfo: RemoteUsageEvent?
     /// UI 请求打开模型选择器（由 /model 命令或用户操作触发，非聊天消息）
     @Published var modelPickerRequested = false
-    /// P4 git 式撤回：收到 history.rewound 后，待 ChatViewModel 消费并回填输入框的原消息文本。
-    @Published private(set) var pendingRewoundDraft: String?
     @Published private(set) var agents: [RemoteAgentDescriptor] = []
     @Published private(set) var currentAgentId: String?
     @Published private(set) var questionnaireQuestions: [ProtocolMessage.QuestionPayload] = []
@@ -98,11 +95,10 @@ final class ConversationStore: ObservableObject {
     private let maxActivities = 2_000
     
     /// Transport 层通过此方法更新 WebSocket 连接状态。
-    func updateConnectionState(_ snapshot: ConnectionStatusSnapshot) {
-        connectionSnapshot = snapshot
-        isConnected = snapshot.isConnected
-        connectionStatus = snapshot.summary
-        if !snapshot.isConnected {
+    func updateConnectionState(connected: Bool, status: String) {
+        isConnected = connected
+        connectionStatus = status
+        if !connected {
             cancelAgentStateReset()
             agentState = .idle
             stateReducer = AgentStateReducer()
@@ -164,13 +160,6 @@ final class ConversationStore: ObservableObject {
     func requestModelPicker() {
         modelPickerRequested = true
     }
-
-    /// P4：消费待回填的“被撤回用户消息原文”。一经消费立即清空，避免重复回填。
-    func consumePendingRewoundDraft() -> String? {
-        let value = pendingRewoundDraft
-        pendingRewoundDraft = nil
-        return value
-    }
     
     func beginSnapshot(generation: Int, reason: String) {
         currentSnapshotGeneration = max(currentSnapshotGeneration, generation)
@@ -187,7 +176,6 @@ final class ConversationStore: ObservableObject {
     /// 中继层通过此方法更新 PC (agent) 在线状态。
     func updateAgentOnline(_ online: Bool) {
         isAgentOnline = online
-        refreshAgentReachability()
     }
     
     /// 问卷层通过此方法设置当前待答问卷。
@@ -297,8 +285,6 @@ final class ConversationStore: ObservableObject {
             handleFile(value, event: event)
         case .session(let value):
             handleSession(value, event: event)
-        case .history(let value):
-            handleHistoryControl(value, event: event)
         case .model(let value):
             handleModel(value, event: event)
         case .questionnaire(let value):
@@ -353,10 +339,8 @@ final class ConversationStore: ObservableObject {
                     RemoteLogger.event("[EVENT] ignore pending-session mismatch expected=\(expectedFile) event=\(eventFile) id=\(event.id)")
                     return true
                 }
-            } else {
-                // pending 期间没有可匹配的 sessionFile 时一律丢弃（B3）：
-                // 仅带 sessionId 无法证明属于新会话；session.info 会带 sessionFile 解除 pending。
-                RemoteLogger.event("[EVENT] ignore session event without matching sessionFile during pending id=\(event.id)")
+            } else if event.scope.sessionId == nil {
+                RemoteLogger.event("[EVENT] ignore unscoped event during session switch id=\(event.id)")
                 return true
             }
         }
@@ -456,23 +440,11 @@ final class ConversationStore: ObservableObject {
         guard currentAgentId != agentId else { return }
         RemoteLogger.session("[SESSION] agent \(currentAgentId ?? "nil") -> \(agentId ?? "nil")")
         currentAgentId = agentId
-        refreshAgentReachability()
     }
 
     func reset() {
         clearSessionScopedProjection(clearSessionState: true)
         sessionList.removeAll()
-    }
-    
-    private func refreshAgentReachability() {
-        connectionSnapshot.targetAgentId = currentAgentId
-        if agents.isEmpty {
-            connectionSnapshot.agentReachability = .noAgents
-        } else if let currentAgentId, !agents.contains(where: { $0.agentId == currentAgentId }) {
-            connectionSnapshot.agentReachability = .currentTargetOffline
-        } else {
-            connectionSnapshot.agentReachability = .agentsAvailable(count: agents.count)
-        }
     }
     
     private func handleAgent(_ value: RemoteAgentEvent, event: RemoteEvent) {
@@ -759,13 +731,6 @@ final class ConversationStore: ObservableObject {
         return String(normalizedPath[..<lastSlash])
     }
     
-    private func handleHistoryControl(_ value: RemoteHistoryControlEvent, event: RemoteEvent) {
-        switch value {
-        case .rewound(let rewoundContent, _):
-            pendingRewoundDraft = rewoundContent
-        }
-    }
-
     private func handleSession(_ value: RemoteSessionEvent, event: RemoteEvent) {
         switch value {
         case .info(let info), .update(let info):
@@ -1028,7 +993,6 @@ final class ConversationStore: ObservableObject {
             RemoteLogger.store("[AGENT] relay.agents count=\(list.count) current=\(currentAgentId ?? "nil") prev=\(prev ?? "nil")")
             // PC 在线状态：有任一 agent 窗口在线即为在线
             isAgentOnline = !agents.isEmpty
-            refreshAgentReachability()
         case .agentJoined(let agent):
             if !agents.contains(where: { $0.agentId == agent.agentId }) {
                 agents.append(agent)
@@ -1037,7 +1001,6 @@ final class ConversationStore: ObservableObject {
                 currentAgentId = agent.agentId
             }
             isAgentOnline = true
-            refreshAgentReachability()
         case .agentLeft(let agentId):
             agents.removeAll { $0.agentId == agentId }
             if currentAgentId == agentId {
@@ -1047,26 +1010,9 @@ final class ConversationStore: ObservableObject {
                 reset()
             }
             isAgentOnline = !agents.isEmpty
-            refreshAgentReachability()
         case .status, .acknowledged, .failed:
             break
         }
-    }
-    
-    /// 目标窗口离线主动 fallback（N1）：由 Transport 在收到 relay.error code=agent_offline 时调用，
-    /// 不必等待下一轮 relay.agents 推送。语义与 .agentLeft 一致：剔除离线窗口、选下一个、reset。
-    func handleTargetAgentOffline() {
-        guard let offlineId = currentAgentId else { return }
-        connectionSnapshot.agentReachability = .currentTargetOffline
-        agents.removeAll { $0.agentId == offlineId }
-        let next = agents.first?.agentId
-        RemoteLogger.session("[SESSION] target offline fallback \(offlineId) -> \(next ?? "nil")")
-        if currentAgentId != next {
-            currentAgentId = next
-            reset()
-        }
-        isAgentOnline = !agents.isEmpty
-        refreshAgentReachability()
     }
     
     private func handleQuestionnaire(_ value: RemoteQuestionnaireEvent, event: RemoteEvent) {
@@ -1409,8 +1355,6 @@ final class ConversationStore: ObservableObject {
         pendingFileContext = nil
         pendingWorkspaceFile = nil
         recentChanges.removeAll()
-        // 注意：Timeline (activityEvents) 与 Trace 由 clearConversationProjection() 清空
-        // （本函数在上方已调用），切换窗口时一并归零，不跨窗口残留。
     }
     
     private func normalizeSessionFile(_ value: String?) -> String? {

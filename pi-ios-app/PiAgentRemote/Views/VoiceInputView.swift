@@ -17,7 +17,7 @@ struct VoiceInputButton: View {
             .font(.system(size: 19, weight: .semibold))
             .foregroundStyle(foregroundColor)
             .frame(width: 44, height: 44)
-            .piFilledCircle(backgroundColor)
+            .background(backgroundColor, in: Circle())
             .contentShape(Circle())
             .scaleEffect(state == .recording && !reduceMotion ? 1.04 : 1)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: state)
@@ -92,14 +92,14 @@ struct VoiceInputButton: View {
     private var foregroundColor: Color {
         switch state {
         case .recording: return .white
-        case .recognizing: return PiDesignSystem.Color.thinking
-        case .failed: return PiDesignSystem.Color.failed
-        default: return PiDesignSystem.Color.accent
+        case .recognizing: return .orange
+        case .failed: return .red
+        default: return .accentColor
         }
     }
     
     private var backgroundColor: Color {
-        state == .recording ? PiDesignSystem.Color.failed : PiDesignSystem.Color.panelElevated
+        state == .recording ? Color.red : Color(uiColor: .tertiarySystemBackground)
     }
     
     private var accessibilityLabel: String {
@@ -123,32 +123,39 @@ struct VoiceRecordingBanner: View {
         HStack(spacing: 10) {
             Image(systemName: isCancelPending ? "xmark.circle.fill" : iconName)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(isCancelPending ? PiDesignSystem.Color.failed : PiDesignSystem.Color.accent)
+                .foregroundStyle(isCancelPending ? Color.red : Color.accentColor)
                 .frame(width: 28, height: 28)
                 .accessibilityHidden(true)
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(PiDesignSystem.Font.subheadline)
-                    .foregroundStyle(isCancelPending ? PiDesignSystem.Color.failed : PiDesignSystem.Color.primary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isCancelPending ? Color.red : Color.primary)
                 Text(detail)
-                    .font(transcript.isEmpty ? PiDesignSystem.Font.caption : PiDesignSystem.Font.body)
-                    .foregroundStyle(PiDesignSystem.Color.secondary)
+                    .font(transcript.isEmpty ? .caption : .callout)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             
             Spacer(minLength: 8)
             
             Button("取消", action: onCancel)
-                .font(PiDesignSystem.Font.captionBold)
+                .font(.caption.weight(.semibold))
                 .frame(minWidth: 44, minHeight: 44)
                 .buttonStyle(.plain)
-                .foregroundStyle(PiDesignSystem.Color.failed)
+                .foregroundStyle(Color.red)
                 .accessibilityHint("放弃本次语音识别并恢复原输入")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .piTintPanel(isCancelPending ? PiDesignSystem.Color.failed : PiDesignSystem.Color.accent)
+        .background(
+            (isCancelPending ? Color.red : Color.accentColor).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke((isCancelPending ? Color.red : Color.accentColor).opacity(0.22), lineWidth: 1)
+        }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isCancelPending)
         .accessibilityElement(children: .contain)
     }
