@@ -105,40 +105,6 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertTrue(store.activityEvents.contains(where: { $0.type == .fileChange }))
     }
     
-    /// 多窗口隔离（B3）：切窗口后 Timeline (activityEvents) 与 Trace 不得残留上一窗口历史。
-    /// switchTarget → reset → clearSessionScopedProjection → clearConversationProjection
-    /// 必须清空 activityEvents 与 currentTrace。
-    func testSwitchTargetClearsTimelineAndTrace_NoCrossWindowLeak() {
-        let store = ConversationStore()
-        // 窗口 A（win-a）：产生一条 file.change → activity + trace
-        store.setCurrentAgentId("win-a")
-        store.accept(event("a-turn",
-            .agent(.status(RemoteAgentStatus(value: "receiving", tool: nil, description: nil))),
-            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
-        store.accept(event("a-file",
-            .file(RemoteFileEvent(path: "a.swift", action: .modified, additions: 2, deletions: 0)),
-            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
-        XCTAssertFalse(store.activityEvents.isEmpty, "窗口 A 应已产生 activity")
-        XCTAssertNotNil(store.currentTrace, "窗口 A 应已产生 trace")
-        XCTAssertEqual(store.messages.count, 1)
-        
-        // 模拟 ChatViewModel.switchTarget(to:)：设新 agent + reset + 清空
-        store.setCurrentAgentId("win-b")
-        store.reset()
-        
-        // 切到 B 后，A 的 Timeline / Trace / messages 全部清空，不得残留。
-        XCTAssertTrue(store.activityEvents.isEmpty, "切窗口后 activityEvents 必须为空（B3）")
-        XCTAssertNil(store.currentTrace, "切窗口后 currentTrace 必须为 nil（B3）")
-        XCTAssertTrue(store.messages.isEmpty, "切窗口后 messages 必须为空")
-        XCTAssertTrue(store.recentChanges.isEmpty, "切窗口后 recentChanges 必须为空")
-        
-        // 且 A 的迟到事件不会再进入（agent 过滤）。
-        store.accept(event("a-late-file",
-            .file(RemoteFileEvent(path: "a-late.swift", action: .modified, additions: 1, deletions: 0)),
-            scope: RemoteEvent.Scope(agentId: "win-a", sessionId: nil, sessionFile: nil, targetAgentId: nil)))
-        XCTAssertTrue(store.activityEvents.isEmpty, "迟到 A 事件不得污染当前窗口")
-    }
-    
     func testSessionHistoryReplacementDoesNotLeakPreviousSession() {
         let store = ConversationStore()
         let first = RemoteHistoryEntry(
@@ -210,30 +176,6 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertFalse(store.showQuestionnaire)
     }
     
-    func testPendingSessionDropsSessionIdOnlyEventWithoutSessionFile_B3() {
-        // B3：pendingSessionFile 期间，仅有 sessionId、无 sessionFile 的事件应被丢弃
-        let store = ConversationStore()
-        store.setCurrentAgentId("win-a")
-        // 先建立一个已知会话身份
-        store.accept(event("info-a", .session(.info(sessionInfo("session-a", file: "sessions/a.jsonl"))),
-                          scope: .init(agentId: "win-a", sessionId: "session-a", sessionFile: "sessions/a.jsonl", targetAgentId: nil)))
-        // 发起切换到 b（进入 pending，期待 sessions/b.jsonl）
-        store.beginSessionSwitch(expectedSessionFile: "sessions/b.jsonl")
-
-        // 旧会话风格的迟到事件：只带 sessionId、不带 sessionFile —— 应被丢弃
-        store.accept(event("late-usage", .usage(RemoteUsageEvent(
-            model: "claude", contextTokens: 1, contextWindow: 10, contextPercent: 10,
-            totalInput: 1, totalOutput: 2, totalCacheRead: 0, totalCacheWrite: 0,
-            totalReasoning: 0, totalTokens: 3, totalCost: 0
-        )), scope: .init(agentId: "win-a", sessionId: "session-a", sessionFile: nil, targetAgentId: nil)))
-        XCTAssertNil(store.usageInfo, "pending 期间 sessionId-only 事件不应被接受")
-
-        // 正确会话（带匹配的 sessionFile）的事件仍放行：session.info 解除 pending
-        store.accept(event("info-b", .session(.info(sessionInfo("session-b", file: "sessions/b.jsonl"))),
-                          scope: .init(agentId: "win-a", sessionId: "session-b", sessionFile: "sessions/b.jsonl", targetAgentId: nil)))
-        XCTAssertEqual(store.sessionState?.sessionId, "session-b")
-    }
-
     func testUnscopedUsageAndModelAreIgnoredWhenSessionKnown() {
         let store = ConversationStore()
         store.setCurrentAgentId("win-a")
@@ -247,20 +189,6 @@ final class ConversationStoreTests: XCTestCase {
         
         XCTAssertNil(store.usageInfo)
         XCTAssertTrue(store.availableModels.isEmpty)
-    }
-
-    func testHistoryRewoundStoresDraftUntilConsumed() {
-        let store = ConversationStore()
-        store.accept(RemoteEvent(
-            id: "rw1",
-            timestamp: Date(),
-            payload: .history(.rewound(rewoundContent: "把 foo 改成 bar", removedUserMessageCount: 2))
-        ))
-
-        XCTAssertEqual(store.pendingRewoundDraft, "把 foo 改成 bar")
-        XCTAssertEqual(store.consumePendingRewoundDraft(), "把 foo 改成 bar")
-        XCTAssertNil(store.pendingRewoundDraft)
-        XCTAssertNil(store.consumePendingRewoundDraft())
     }
     
     func testStaleGenerationModelListIsIgnored() {

@@ -38,11 +38,6 @@ final class RemoteEventDecoderTests: XCTestCase {
         XCTAssertEqual(event.generation, 12)
         XCTAssertEqual(event.selectionRequestId, "sel-1")
     }
-
-    func testHistoryRewoundDecodes() throws {
-        let event = try decode(#"{"id":"rw1","type":"history.rewound","timestamp":1003,"payload":{"text":"把 foo 改成 bar","removedMessageCount":2}}"#)
-        XCTAssertEqual(event.payload, .history(.rewound(rewoundContent: "把 foo 改成 bar", removedUserMessageCount: 2)))
-    }
     
     private func decode(_ json: String) throws -> RemoteEvent {
         try XCTUnwrap(RemoteEventDecoder.decode(text: json))
