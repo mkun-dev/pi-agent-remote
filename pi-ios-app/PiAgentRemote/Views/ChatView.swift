@@ -146,17 +146,19 @@ struct ChatView: View {
     /// 抽为独立方法，避免 body 表达式过长导致 Swift 类型检查超时。
     @ViewBuilder
     private func messageRowItem(for msg: Message) -> some View {
-        EquatableView {
-            MessageRow(
-                message: msg,
-                store: store,
-                onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
-                onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
-                onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
-                onSelectFileChange: { selectedFileChange = $0 },
-                onSelectImage: { selectedImagePreview = $0 }
-            )
-        }
+        // .equatable() 返回 EquatableView<MessageRow>（具体类型，类型检查极快）。
+        // 不能用 EquatableView { } 尾随闭包 —— 它没有 @ViewBuilder 初始化方法，
+        // 会被解析为 EquatableView(content: { ... })，使 Content = () -> MessageRow 而编译失败。
+        MessageRow(
+            message: msg,
+            store: store,
+            onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
+            onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
+            onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
+            onSelectFileChange: { selectedFileChange = $0 },
+            onSelectImage: { selectedImagePreview = $0 }
+        )
+        .equatable()
         .id(msg.id)
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .offset(y: 8)),
