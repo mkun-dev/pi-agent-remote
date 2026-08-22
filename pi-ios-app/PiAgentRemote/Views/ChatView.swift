@@ -142,55 +142,74 @@ struct ChatView: View {
         viewModel.send()
     }
     
-    /// 抽取聊天滚动内容为独立计算单元，避免 body 表达式过长导致 Swift 类型检查超时。
+    /// 单条消息行（EquatableView 包裹，按内容判等跳过未变化行）。
+    /// 抽为独立方法，避免 body 表达式过长导致 Swift 类型检查超时。
     @ViewBuilder
-    private func chatScrollContent(msgs: [Message], messageIDs: [String], viewport: GeometryProxy, proxy: ScrollViewProxy) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(msgs) { msg in
-                    EquatableView {
-                        MessageRow(
-                            message: msg,
-                            store: store,
-                            onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
-                            onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
-                            onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
-                            onSelectFileChange: { selectedFileChange = $0 },
-                            onSelectImage: { selectedImagePreview = $0 }
-                        )
-                    }
-                    .id(msg.id)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 8)),
-                        removal: .opacity
-                    ))
-                }
-                Color.clear
-                    .frame(height: 1)
-                    .id(bottomAnchorID)
-                    .background(
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: ChatScrollBottomPreferenceKey.self,
-                                value: geometry.frame(in: .named("chat-scroll")).maxY
-                            )
-                        }
-                    )
-            }
+    private func messageRowItem(for msg: Message) -> some View {
+        EquatableView {
+            MessageRow(
+                message: msg,
+                store: store,
+                onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
+                onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
+                onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
+                onSelectFileChange: { selectedFileChange = $0 },
+                onSelectImage: { selectedImagePreview = $0 }
+            )
+        }
+        .id(msg.id)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 8)),
+            removal: .opacity
+        ))
+    }
+
+    /// 底部锚点（滚动定位 + 偏移测量）。
+    @ViewBuilder
+    private func bottomAnchorPreference() -> some View {
+        Color.clear
+            .frame(height: 1)
+            .id(bottomAnchorID)
             .background(
                 GeometryReader { geometry in
                     Color.clear.preference(
-                        key: ChatScrollContentHeightPreferenceKey.self,
-                        value: geometry.size.height
+                        key: ChatScrollBottomPreferenceKey.self,
+                        value: geometry.frame(in: .named("chat-scroll")).maxY
                     )
                 }
             )
-            .animation(
-                reduceMotion ? nil : PiDesignSystem.Animation.default,
-                value: messageIDs
-            )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+    }
+
+    /// 消息列表内容（LazyVStack），不含 ScrollView 及其修饰符。
+    @ViewBuilder
+    private func messageListContent(msgs: [Message], messageIDs: [String]) -> some View {
+        LazyVStack(alignment: .leading, spacing: 16) {
+            ForEach(msgs) { msg in
+                messageRowItem(for: msg)
+            }
+            bottomAnchorPreference()
+        }
+        .background(
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: ChatScrollContentHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
+            }
+        )
+        .animation(
+            reduceMotion ? nil : PiDesignSystem.Animation.default,
+            value: messageIDs
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    /// 聊天滚动视图及其全部修饰符。拆分为多个子方法以满足 Swift 类型检查时限。
+    @ViewBuilder
+    private func chatScrollContent(msgs: [Message], messageIDs: [String], viewport: GeometryProxy, proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            messageListContent(msgs: msgs, messageIDs: messageIDs)
         }
         .coordinateSpace(name: "chat-scroll")
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
