@@ -142,6 +142,102 @@ struct ChatView: View {
         viewModel.send()
     }
     
+    /// 抽取聊天滚动内容为独立计算单元，避免 body 表达式过长导致 Swift 类型检查超时。
+    @ViewBuilder
+    private func chatScrollContent(msgs: [Message], messageIDs: [String], viewport: GeometryProxy, proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                ForEach(msgs) { msg in
+                    EquatableView {
+                        MessageRow(
+                            message: msg,
+                            store: store,
+                            onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
+                            onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
+                            onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
+                            onSelectFileChange: { selectedFileChange = $0 },
+                            onSelectImage: { selectedImagePreview = $0 }
+                        )
+                    }
+                    .id(msg.id)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 8)),
+                        removal: .opacity
+                    ))
+                }
+                Color.clear
+                    .frame(height: 1)
+                    .id(bottomAnchorID)
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ChatScrollBottomPreferenceKey.self,
+                                value: geometry.frame(in: .named("chat-scroll")).maxY
+                            )
+                        }
+                    )
+            }
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ChatScrollContentHeightPreferenceKey.self,
+                        value: geometry.size.height
+                    )
+                }
+            )
+            .animation(
+                reduceMotion ? nil : PiDesignSystem.Animation.default,
+                value: messageIDs
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .coordinateSpace(name: "chat-scroll")
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .onPreferenceChange(ChatScrollBottomPreferenceKey.self) { bottomY in
+            scrollController.handleBottomAnchor(bottomY: bottomY, viewportHeight: viewport.size.height)
+        }
+        .onPreferenceChange(ChatScrollContentHeightPreferenceKey.self) { height in
+            scrollController.handleContentHeightChange(height)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded {
+            inputFocused = false
+        })
+        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { value in
+            guard value.translation.height > 8, !inputFocused else { return }
+            scrollController.userStartedReadingHistory()
+        })
+        .onAppear {
+            if scrollController.sessionRevision != store.sessionProjectionRevision {
+                scrollController.beginSessionRevision(store.sessionProjectionRevision)
+            }
+            scrollController.handleViewAppear(hasMessages: !msgs.isEmpty)
+        }
+        .onChange(of: messageIDs) { ids in
+            scrollController.handleMessageIDsChanged(
+                hasMessages: !ids.isEmpty,
+                animated: !reduceMotion
+            )
+        }
+        .onChange(of: store.streamingRevision) { revision in
+            scrollController.handleStreamingRevisionChange(
+                hasActiveStreamingMessage: store.activeStreamingMessageID != nil,
+                revision: revision,
+                messageID: store.activeStreamingMessageID
+            )
+        }
+        .onChange(of: store.activeStreamingMessageID) { messageID in
+            if messageID == nil {
+                scrollController.handleStreamingEnded()
+            }
+        }
+        .onChange(of: scrollController.pendingScrollRequest) { request in
+            guard let request else { return }
+            performScroll(request, proxy: proxy)
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Agent 状态 Header — 概览：连接、阶段、Tool、Model、Session、窗口选择、断开
@@ -165,97 +261,7 @@ struct ChatView: View {
                     let msgs = visibleMessages
                     let messageIDs = msgs.map(\.id)
                     ZStack(alignment: .bottomTrailing) {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 16) {
-                                ForEach(msgs) { msg in
-                                    EquatableView {
-                                        MessageRow(
-                                            message: msg,
-                                            store: store,
-                                            onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
-                                            onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
-                                            onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
-                                            onSelectFileChange: { selectedFileChange = $0 },
-                                            onSelectImage: { selectedImagePreview = $0 }
-                                        )
-                                    }
-                                    .id(msg.id)
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .offset(y: 8)),
-                                        removal: .opacity
-                                    ))
-                                }
-                                Color.clear
-                                    .frame(height: 1)
-                                    .id(bottomAnchorID)
-                                    .background(
-                                        GeometryReader { geometry in
-                                            Color.clear.preference(
-                                                key: ChatScrollBottomPreferenceKey.self,
-                                                value: geometry.frame(in: .named("chat-scroll")).maxY
-                                            )
-                                        }
-                                    )
-                            }
-                            .background(
-                                GeometryReader { geometry in
-                                    Color.clear.preference(
-                                        key: ChatScrollContentHeightPreferenceKey.self,
-                                        value: geometry.size.height
-                                    )
-                                }
-                            )
-                            .animation(
-                                reduceMotion ? nil : PiDesignSystem.Animation.default,
-                                value: messageIDs
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
-                        .coordinateSpace(name: "chat-scroll")
-                        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-                        .onPreferenceChange(ChatScrollBottomPreferenceKey.self) { bottomY in
-                            scrollController.handleBottomAnchor(bottomY: bottomY, viewportHeight: viewport.size.height)
-                        }
-                        .onPreferenceChange(ChatScrollContentHeightPreferenceKey.self) { height in
-                            scrollController.handleContentHeightChange(height)
-                        }
-                        .scrollDismissesKeyboard(.interactively)
-                        .simultaneousGesture(TapGesture().onEnded {
-                            inputFocused = false
-                        })
-                        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { value in
-                            guard value.translation.height > 8, !inputFocused else { return }
-                            scrollController.userStartedReadingHistory()
-                        })
-                        .onAppear {
-                            if scrollController.sessionRevision != store.sessionProjectionRevision {
-                                scrollController.beginSessionRevision(store.sessionProjectionRevision)
-                            }
-                            scrollController.handleViewAppear(hasMessages: !msgs.isEmpty)
-                        }
-                        .onChange(of: messageIDs) { ids in
-                            scrollController.handleMessageIDsChanged(
-                                hasMessages: !ids.isEmpty,
-                                animated: !reduceMotion
-                            )
-                        }
-                        .onChange(of: store.streamingRevision) { revision in
-                            scrollController.handleStreamingRevisionChange(
-                                hasActiveStreamingMessage: store.activeStreamingMessageID != nil,
-                                revision: revision,
-                                messageID: store.activeStreamingMessageID
-                            )
-                        }
-                        .onChange(of: store.activeStreamingMessageID) { messageID in
-                            if messageID == nil {
-                                scrollController.handleStreamingEnded()
-                            }
-                        }
-                        .onChange(of: scrollController.pendingScrollRequest) { request in
-                            guard let request else { return }
-                            performScroll(request, proxy: proxy)
-                        }
+                        chatScrollContent(msgs: msgs, messageIDs: messageIDs, viewport: viewport, proxy: proxy)
                         
                         if scrollController.shouldShowJumpButton && !msgs.isEmpty {
                             Button {
