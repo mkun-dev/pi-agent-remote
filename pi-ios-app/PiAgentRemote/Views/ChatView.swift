@@ -10,20 +10,11 @@ struct BubbleShape: Shape {
     func path(in rect: CGRect) -> Path {
         let r: CGFloat = 18
         let tailR: CGFloat = 4   // 靠发言者一侧的收窄圆角
-        let radii: [CGFloat] = isUser
-            ? [r, r, tailR, r]   // 用户：右上、右下收窄
-            : [r, r, r, tailR]   // Pi：左上、左下收窄（按 topLeft,topRight,bottomLeft,bottomRight 顺序重排）
-        // RoundedRectangle 的 cornerRadii 参数顺序：[topLeft, topRight, bottomLeft, bottomRight]
-        let cornerRadii: [CGFloat] = isUser
-            ? [r, r, r, tailR]   // 用户右下收窄
-            : [r, r, tailR, r]   // Pi 左下收窄
-        let rr = RoundedRectangle(cornerRadii: RectangleCornerRadii(
-            topLeft: cornerRadii[0],
-            topRight: cornerRadii[1],
-            bottomLeft: cornerRadii[2],
-            bottomRight: cornerRadii[3]
-        ), style: .continuous)
-        return rr.path(in: rect)
+        // RectangleCornerRadii 参数顺序：topLeading, bottomLeading, bottomTrailing, topTrailing
+        let radii: RectangleCornerRadii = isUser
+            ? RectangleCornerRadii(topLeading: r, bottomLeading: r, bottomTrailing: tailR, topTrailing: r)   // 用户右下收窄
+            : RectangleCornerRadii(topLeading: r, bottomLeading: tailR, bottomTrailing: r, topTrailing: r)   // Pi 左下收窄
+        return UnevenRoundedRectangle(cornerRadii: radii, style: .continuous).path(in: rect)
     }
 }
 
