@@ -13,7 +13,7 @@ enum PiDesignSystem {
         static let background = SwiftUI.Color(uiColor: .systemBackground)
         static let surface     = SwiftUI.Color(uiColor: .secondarySystemBackground)
         static let card        = SwiftUI.Color(uiColor: .secondarySystemBackground)
-        static let codeBg      = SwiftUI.Color.black.opacity(0.04)
+        static let codeBg      = SwiftUI.Color(uiColor: .tertiarySystemFill)
         
         // Text
         static let primary     = SwiftUI.Color.primary

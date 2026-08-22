@@ -192,10 +192,17 @@ final class ConversationStoreTests: XCTestCase {
     }
     
     func testStaleGenerationModelListIsIgnored() {
+        // 新契约：只有当已经接受过更新的 model.list 响应后，更老的响应才被丢弃。
+        // 这样可以避免连接时「快照风暴」（多轮 beginSnapshot 递增 generation）误丢弃
+        // 已到达的有效响应。beginSnapshot 本身不再使在途响应失效。
         let store = ConversationStore()
         store.beginSnapshot(generation: 6, reason: "test")
-        store.accept(RemoteEvent(id: "model", timestamp: Date(), payload: .model(.list(["old"])), generation: 5))
-        XCTAssertTrue(store.availableModels.isEmpty)
+        // 先接受更新 generation 的响应
+        store.accept(RemoteEvent(id: "model-new", timestamp: Date(), payload: .model(.list(["fresh"])), generation: 6))
+        XCTAssertEqual(store.availableModels, ["fresh"])
+        // 更老的响应应被忽略，不覆盖已接受的更新结果
+        store.accept(RemoteEvent(id: "model-old", timestamp: Date(), payload: .model(.list(["old"])), generation: 5))
+        XCTAssertEqual(store.availableModels, ["fresh"])
     }
     
     func testStaleSelectionAckRequestIsIgnored() {

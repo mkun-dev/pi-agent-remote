@@ -136,8 +136,24 @@ final class ModelUsageStateTests: XCTestCase {
     }
     
     func testStaleGenerationUsageIsIgnored() {
+        // 新契约：只有当已经接受过更新 generation 的 usage 响应后，更老的响应才被丢弃。
+        // 这样可以避免连接时「快照风暴」（多轮 beginSnapshot 递增 generation）误丢弃
+        // 已到达的有效响应。beginSnapshot 本身不再使在途响应失效。
         let store = ConversationStore()
         store.beginSnapshot(generation: 5, reason: "test")
+        // 先接受更新 generation 的 usage
+        store.accept(RemoteEvent(
+            id: "fresh-usage",
+            timestamp: Date(),
+            payload: .usage(RemoteUsageEvent(
+                model: "claude", contextTokens: nil, contextWindow: 0, contextPercent: nil,
+                totalInput: 10, totalOutput: 20, totalCacheRead: 0, totalCacheWrite: 0,
+                totalReasoning: 0, totalTokens: 30, totalCost: 0
+            )),
+            generation: 5
+        ))
+        XCTAssertEqual(store.usageInfo?.totalTokens, 30)
+        // 更老的 usage 应被忽略，不覆盖已接受的更新结果
         store.accept(RemoteEvent(
             id: "old-usage",
             timestamp: Date(),
@@ -148,7 +164,7 @@ final class ModelUsageStateTests: XCTestCase {
             )),
             generation: 4
         ))
-        XCTAssertNil(store.usageInfo)
+        XCTAssertEqual(store.usageInfo?.totalTokens, 30)
     }
     
     func testSuccessfulSelectionPreventsOlderUsageModelRollback() {

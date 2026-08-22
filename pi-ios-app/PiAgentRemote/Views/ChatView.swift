@@ -2,6 +2,31 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
+/// 聊天气泡形状：靠发言者一侧圆角较小，营造对话气泡方向感。
+/// 用户消息右侧底角小圆角（靠近头像），Pi 消息左侧底角小圆角。
+struct BubbleShape: Shape {
+    let isUser: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        let r: CGFloat = 18
+        let tailR: CGFloat = 4   // 靠发言者一侧的收窄圆角
+        let radii: [CGFloat] = isUser
+            ? [r, r, tailR, r]   // 用户：右上、右下收窄
+            : [r, r, r, tailR]   // Pi：左上、左下收窄（按 topLeft,topRight,bottomLeft,bottomRight 顺序重排）
+        // RoundedRectangle 的 cornerRadii 参数顺序：[topLeft, topRight, bottomLeft, bottomRight]
+        let cornerRadii: [CGFloat] = isUser
+            ? [r, r, r, tailR]   // 用户右下收窄
+            : [r, r, tailR, r]   // Pi 左下收窄
+        let rr = RoundedRectangle(cornerRadii: RectangleCornerRadii(
+            topLeft: cornerRadii[0],
+            topRight: cornerRadii[1],
+            bottomLeft: cornerRadii[2],
+            bottomRight: cornerRadii[3]
+        ), style: .continuous)
+        return rr.path(in: rect)
+    }
+}
+
 /// 聊天流展示过滤（纯展示层，不删除底层数据）。
 /// 聊天窗口只展示用户消息与 Assistant 最终回复（含 streaming）；
 /// 内部 Tool 执行过程由 TaskTimelineView / Trace 承担展示。
@@ -150,17 +175,19 @@ struct ChatView: View {
                     let messageIDs = msgs.map(\.id)
                     ZStack(alignment: .bottomTrailing) {
                         ScrollView {
-                            LazyVStack(alignment: .leading, spacing: PiDesignSystem.Spacing.md) {
+                            LazyVStack(alignment: .leading, spacing: 16) {
                                 ForEach(msgs) { msg in
-                                    MessageRow(
-                                        message: msg,
-                                        store: store,
-                                        onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
-                                        onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
-                                        onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
-                                        onSelectFileChange: { selectedFileChange = $0 },
-                                        onSelectImage: { selectedImagePreview = $0 }
-                                    )
+                                    EquatableView {
+                                        MessageRow(
+                                            message: msg,
+                                            store: store,
+                                            onToggleToolGroup: { viewModel.toggleToolGroup(messageId: msg.id) },
+                                            onToggleFileChanges: { viewModel.toggleFileChanges(messageId: msg.id) },
+                                            onToggleTrace: { viewModel.toggleAgentTrace(messageId: msg.id) },
+                                            onSelectFileChange: { selectedFileChange = $0 },
+                                            onSelectImage: { selectedImagePreview = $0 }
+                                        )
+                                    }
                                     .id(msg.id)
                                     .transition(.asymmetric(
                                         insertion: .opacity.combined(with: .offset(y: 8)),
@@ -195,6 +222,7 @@ struct ChatView: View {
                             .padding(.vertical, 12)
                         }
                         .coordinateSpace(name: "chat-scroll")
+                        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
                         .onPreferenceChange(ChatScrollBottomPreferenceKey.self) { bottomY in
                             scrollController.handleBottomAnchor(bottomY: bottomY, viewportHeight: viewport.size.height)
                         }
@@ -462,7 +490,7 @@ struct ChatView: View {
     }
 }
 
-struct MessageRow: View {
+struct MessageRow: View, Equatable {
     let message: Message
     let store: ConversationStore
     let onToggleToolGroup: () -> Void
@@ -471,6 +499,12 @@ struct MessageRow: View {
     let onSelectFileChange: (FileChange) -> Void
     let onSelectImage: (ImagePreviewItem) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
+    // 流式性能优化：只按 message 内容判等，忽略闭包/store 引用。
+    // 父视图每个 delta 都重算 body，但未变化的行通过 EquatableView 跳过。
+    static func == (lhs: MessageRow, rhs: MessageRow) -> Bool {
+        lhs.message == rhs.message
+    }
     
     var body: some View {
         if message.kind == .status {
@@ -529,7 +563,7 @@ struct MessageRow: View {
         switch message.kind {
         case .text:
             if message.isUser {
-                // 用户：蓝色渐变气泡
+                // 用户气泡：柔和渐变 + 记忆处圆角收窄（对话气泡感）
                 Text(message.content)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -540,8 +574,8 @@ struct MessageRow: View {
                         )
                     )
                     .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous))
-                    .shadow(color: .blue.opacity(0.25), radius: PiDesignSystem.Shadow.userBubbleRadius, x: 0, y: PiDesignSystem.Shadow.userBubbleY)  // 层次区分
+                    .clipShape(BubbleShape(isUser: true))
+                    .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
                     .textSelection(.enabled)
             } else {
                 // Pi：最终 Markdown 正文 + 轻量 Agent Trace + 左侧 accent 条
@@ -572,7 +606,11 @@ struct MessageRow: View {
                     }
                 }
                 .background(PiDesignSystem.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: PiDesignSystem.Radius.bubble, style: .continuous))
+                .clipShape(BubbleShape(isUser: false))
+                .overlay(
+                    BubbleShape(isUser: false)
+                        .stroke(PiDesignSystem.Color.border, lineWidth: 0.5)
+                )
             }
         case .thinking:
             // 思考：半透明橙气泡 + 闪烁光标

@@ -8,6 +8,7 @@ struct PiAgentRemoteApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
+                .accentColor(PiDesignSystem.Color.piBrand)
         }
     }
 }
