@@ -96,6 +96,12 @@ struct AgentStatusHeader: View {
             
             statusLabel
             
+            // 模型徽章常驻显示（不再只在工作中/展开时才出现）
+            let displayModel = store.currentModel ?? store.usageInfo?.model
+            if let model = displayModel, !model.isEmpty {
+                modelBadge(model)
+            }
+            
             Spacer(minLength: 4)
             
             if store.agentState.isWorking {

@@ -310,10 +310,21 @@ struct ChatView: View {
                 .disabled(isVoiceActive)
                 
                 TextField("输入消息发送给 Pi...", text: $viewModel.inputText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
                     .focused($inputFocused)
                     .disabled(isVoiceActive)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(UIColor.tertiarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(inputFocused ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.15),
+                                    lineWidth: inputFocused ? 1.5 : 1)
+                    )
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: inputFocused)
                 
                 VoiceInputButton(
                     state: speechService.state,
@@ -338,7 +349,7 @@ struct ChatView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(.regularMaterial)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.agentState)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: speechService.state)

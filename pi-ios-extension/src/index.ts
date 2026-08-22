@@ -155,13 +155,23 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function resolveAvailableModels(): Promise<any[]> {
+    // 1) 会话级 scopedModels 优先（--models / enabledModels 过滤后的集合）
     if (sessionCtx?.scopedModels?.length) {
       return sessionCtx.scopedModels.map((s: any) => s.model);
     }
+    // 2) 已认证 provider 的可用模型
     if (sessionCtx?.modelRegistry) {
-      return (await sessionCtx.modelRegistry.getAvailable?.()) ?? [];
+      const reg = sessionCtx.modelRegistry;
+      const avail = (await reg.getAvailable?.()) ?? [];
+      if (avail.length) return avail;
+      // 3) 兜底：getAvailable 为空时（如 OAuth provider 未被标记 configured），
+      //    取 getAll() 全量，至少保证模型选择器不为空。
+      const all = reg.getAll?.() ?? [];
+      if (all.length) return all;
     }
-    return [];
+    // 4) 最终兜底：至少返回当前运行时模型，避免选择器完全空白。
+    const current = sessionCtx?.model;
+    return current ? [current] : [];
   }
 
   function broadcastUsageInfo(recalculateFromSession = true, generation?: number): void {
@@ -176,7 +186,9 @@ export default function (pi: ExtensionAPI) {
   async function handleUsageRequest(msg: any, respond: (event: unknown) => void): Promise<void> {
     const generation = typeof msg?.payload?.generation === "number" ? msg.payload.generation : undefined;
     try {
-      respond(buildUsageInfo(true, generation));
+      const info = buildUsageInfo(true, generation);
+      console.log(`[USAGE] request gen=${generation ?? "nil"} -> model=${(info.payload as any)?.model ?? "nil"} totalTokens=${(info.payload as any)?.totalTokens ?? 0} acc={in:${usageAcc.input} out:${usageAcc.output}}`);
+      respond(info);
     } catch (e) {
       console.error("❌ usage.request failed:", e);
       respond(ProtocolHandler.createUsageInfo({
@@ -477,6 +489,7 @@ export default function (pi: ExtensionAPI) {
     const models = await resolveAvailableModels();
     const modelId = (m: any) => m?.id ?? m?.modelId ?? String(m);
     const ids = models.map((m: any) => modelId(m));
+    console.log(`[MODEL] request gen=${generation ?? "nil"} -> ${ids.length} models${ids.length ? ": " + ids.slice(0, 5).join(", ") : " (empty)"}`);
 
     respond(ProtocolHandler.createModelList(ids, generation));
   }
@@ -1203,10 +1216,12 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", async (event, _ctx) => {
     // 累计用量（模型/上下文/缓存命中统计）—— 同一 messageId 重复触发时跳过，防止翻倍（N2）
     const turnMessageId = (event as any)?.message?.id ?? null;
+    const rawUsage = (event as any)?.message?.usage;
     const [skipDup, nextSeen] = shouldSkipDuplicateTurnEnd(turnMessageId, lastTurnEndMessageId);
     if (!skipDup) {
       lastTurnEndMessageId = nextSeen;
-      accumulateUsage((event as any).message?.usage);
+      accumulateUsage(rawUsage);
+      console.log(`[USAGE] turn_end msgId=${turnMessageId ?? "nil"} usageKeys=${rawUsage ? JSON.stringify(Object.keys(rawUsage)) : "null"} -> acc totalTokens=${usageAcc.totalTokens}`);
     }
     // 缓存当前模型（供 usage 查询；ctx.model 非 turn 期间可能为空）
     const modelId = (event as any).message?.model;

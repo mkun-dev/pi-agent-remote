@@ -178,8 +178,13 @@ struct SettingsView: View {
                     LabeledContent("累计 tokens", value: "\(usage.totalTokens)")
                     LabeledContent("累计费用", value: usage.costText)
                 } else if store.isConnected {
-                    Text("正在同步用量数据…")
-                        .foregroundColor(.secondary)
+                    if store.currentModel == nil && currentUsage?.model == nil {
+                        Text("尚未连接到 Agent 或未开始对话")
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("正在同步用量数据…")
+                            .foregroundColor(.secondary)
+                    }
                 } else {
                     Text("暂无用量数据")
                         .foregroundColor(.secondary)
