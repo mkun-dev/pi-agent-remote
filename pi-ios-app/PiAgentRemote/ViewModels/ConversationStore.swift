@@ -31,13 +31,6 @@ final class ConversationStore: ObservableObject {
     @Published var modelPickerRequested = false
     @Published private(set) var agents: [RemoteAgentDescriptor] = []
     @Published private(set) var currentAgentId: String?
-    
-    // MARK: - 诊断（定位用量/模型不显示问题；确认后可删除）
-    @Published private(set) var diagLastRawUsage: String?      // 收到的最后一条 usage 事件原始内容
-    @Published private(set) var diagLastRawModel: String?      // 收到的最后一条 model.list 事件原始内容
-    @Published private(set) var diagLastDrop: String?          // shouldIgnore 最后一次丢弃原因
-    @Published private(set) var diagLastGenDrop: String?       // stale generation 最后一次丢弃原因
-    @Published private(set) var diagAcceptCount: Int = 0       // 成功 accept 的事件计数
     @Published private(set) var questionnaireQuestions: [ProtocolMessage.QuestionPayload] = []
     @Published var showQuestionnaire = false
     private(set) var activeQuestionnaireId: String?
@@ -265,25 +258,8 @@ final class ConversationStore: ObservableObject {
     }
     
     func accept(_ event: RemoteEvent) {
-        // 【诊断】捕获 usage/model 原始事件（定位不显示问题）
-        if case .usage(let u) = event.payload {
-            diagLastRawUsage = "model=\(u.model ?? "nil") tokens=\(u.totalTokens) gen=\(event.generation ?? -1) scope.agent=\(event.scope.agentId ?? "nil") scope.session=\(event.scope.sessionId ?? "nil")"
-        }
-        if case .model(let m) = event.payload {
-            if case .list(let ids) = m {
-                diagLastRawModel = "\(ids.count) models gen=\(event.generation ?? -1) scope.agent=\(event.scope.agentId ?? "nil")"
-            }
-        }
-        if shouldIgnore(event) {
-            // 【诊断】记录 usage/model 被丢弃的原因
-            captureDropReason(event, stage: "shouldIgnore")
-            return
-        }
-        if shouldIgnoreStaleGeneration(event) {
-            captureDropReason(event, stage: "staleGeneration")
-            return
-        }
-        diagAcceptCount += 1
+        if shouldIgnore(event) { return }
+        if shouldIgnoreStaleGeneration(event) { return }
         eventSequence &+= 1
 
         // Conversation 安全过滤（防御性白名单，第七阶段）：
@@ -324,18 +300,6 @@ final class ConversationStore: ObservableObject {
         case .unknown:
             break
         }
-    }
-    
-    /// 【诊断】只记录 usage/model 事件的丢弃原因（其他事件丢弃不影响定位）
-    private func captureDropReason(_ event: RemoteEvent, stage: String) {
-        let isUsageModel: Bool
-        if case .usage = event.payload { isUsageModel = true }
-        else if case .model = event.payload { isUsageModel = true }
-        else { isUsageModel = false }
-        guard isUsageModel else { return }
-        let reason = "[\(stage)] gen=\(event.generation ?? -1) curGen=\(currentSnapshotGeneration) agent=\(event.scope.agentId ?? "nil") curAgent=\(currentAgentId ?? "nil") session=\(event.scope.sessionId ?? "nil") curSession=\(sessionState?.sessionId ?? "nil") pendingFile=\(pendingSessionFile ?? "nil")"
-        if stage == "shouldIgnore" { diagLastDrop = reason }
-        else { diagLastGenDrop = reason }
     }
     
     private func shouldIgnore(_ event: RemoteEvent) -> Bool {
@@ -414,21 +378,25 @@ final class ConversationStore: ObservableObject {
     private func shouldIgnoreStaleGeneration(_ event: RemoteEvent) -> Bool {
         switch event.payload {
         case .usage:
-            if let generation = event.generation, generation < currentSnapshotGeneration {
-                RemoteLogger.usage("[STORE] ignore stale usage generation=\(generation) current=\(currentSnapshotGeneration)")
+            // 只丢弃「已经接受了更新 generation 响应」之后的旧响应；
+            // 避免连接时快照风暴（多轮请求 generation 递增）导致已到达的响应被误丢弃。
+            if let generation = event.generation,
+               let accepted = latestAcceptedUsageGeneration,
+               generation < accepted {
+                RemoteLogger.usage("[STORE] ignore stale usage generation=\(generation) accepted=\(accepted)")
                 return true
             }
         case .model(let value):
             if case .list = value {
                 guard let generation = event.generation else {
                     if pendingModelGeneration != nil {
-                        RemoteLogger.model("[STORE] ignore model.list without generation current=\(currentSnapshotGeneration)")
+                        RemoteLogger.model("[STORE] ignore model.list without generation")
                         return true
                     }
                     return false
                 }
-                if generation < currentSnapshotGeneration {
-                    RemoteLogger.model("[STORE] ignore stale model.list generation=\(generation) current=\(currentSnapshotGeneration)")
+                if let accepted = latestAcceptedModelGeneration, generation < accepted {
+                    RemoteLogger.model("[STORE] ignore stale model.list generation=\(generation) accepted=\(accepted)")
                     return true
                 }
             }

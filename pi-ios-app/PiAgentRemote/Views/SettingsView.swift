@@ -214,42 +214,6 @@ struct SettingsView: View {
                 }
             }
             
-            // MARK: - 诊断面板（定位用量/模型不显示；问题解决后可删除）
-            Section(header: Text("诊断（用量/模型）")) {
-                LabeledContent("连接", value: "\(store.isConnected) | \(store.connectionStatus)")
-                LabeledContent("当前 Agent", value: store.currentAgentId ?? "nil")
-                LabeledContent("快照代次", value: "\(store.currentSnapshotGeneration)")
-                LabeledContent("已接受事件", value: "\(store.diagAcceptCount)")
-                if let raw = store.diagLastRawUsage {
-                    Text("收到的 usage：\(raw)")
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("未收到任何 usage 事件")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
-                if let raw = store.diagLastRawModel {
-                    Text("收到的 model：\(raw)")
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("未收到任何 model 事件")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
-                if let drop = store.diagLastDrop {
-                    Text("scope 丢弃：\(drop)")
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.red)
-                }
-                if let drop = store.diagLastGenDrop {
-                    Text("generation 丢弃：\(drop)")
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.red)
-                }
-            }
-            
             Section(header: Text("语音输入")) {
                 Picker("识别语言", selection: $settings.voiceLanguage) {
                     ForEach(VoiceRecognitionLanguage.allCases) { language in

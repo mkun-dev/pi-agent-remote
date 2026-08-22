@@ -186,9 +186,7 @@ export default function (pi: ExtensionAPI) {
   async function handleUsageRequest(msg: any, respond: (event: unknown) => void): Promise<void> {
     const generation = typeof msg?.payload?.generation === "number" ? msg.payload.generation : undefined;
     try {
-      const info = buildUsageInfo(true, generation);
-      console.log(`[USAGE] request gen=${generation ?? "nil"} -> model=${(info.payload as any)?.model ?? "nil"} totalTokens=${(info.payload as any)?.totalTokens ?? 0} acc={in:${usageAcc.input} out:${usageAcc.output}}`);
-      respond(info);
+      respond(buildUsageInfo(true, generation));
     } catch (e) {
       console.error("❌ usage.request failed:", e);
       respond(ProtocolHandler.createUsageInfo({
@@ -489,7 +487,6 @@ export default function (pi: ExtensionAPI) {
     const models = await resolveAvailableModels();
     const modelId = (m: any) => m?.id ?? m?.modelId ?? String(m);
     const ids = models.map((m: any) => modelId(m));
-    console.log(`[MODEL] request gen=${generation ?? "nil"} -> ${ids.length} models${ids.length ? ": " + ids.slice(0, 5).join(", ") : " (empty)"}`);
 
     respond(ProtocolHandler.createModelList(ids, generation));
   }
@@ -1216,12 +1213,10 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", async (event, _ctx) => {
     // 累计用量（模型/上下文/缓存命中统计）—— 同一 messageId 重复触发时跳过，防止翻倍（N2）
     const turnMessageId = (event as any)?.message?.id ?? null;
-    const rawUsage = (event as any)?.message?.usage;
     const [skipDup, nextSeen] = shouldSkipDuplicateTurnEnd(turnMessageId, lastTurnEndMessageId);
     if (!skipDup) {
       lastTurnEndMessageId = nextSeen;
-      accumulateUsage(rawUsage);
-      console.log(`[USAGE] turn_end msgId=${turnMessageId ?? "nil"} usageKeys=${rawUsage ? JSON.stringify(Object.keys(rawUsage)) : "null"} -> acc totalTokens=${usageAcc.totalTokens}`);
+      accumulateUsage((event as any).message?.usage);
     }
     // 缓存当前模型（供 usage 查询；ctx.model 非 turn 期间可能为空）
     const modelId = (event as any).message?.model;
