@@ -17,25 +17,25 @@ struct ContentView: View {
     
     var body: some View {
         TabView(selection: $viewModel.activeTab) {
-            NavigationView {
+            NavigationStack {
                 ChatView(viewModel: viewModel)
             }
             .tabItem { Label("聊天", systemImage: "message.fill") }
             .tag(0)
             
-            NavigationView {
+            NavigationStack {
                 WorkspaceExplorerView(viewModel: viewModel)
             }
             .tabItem { Label("文件", systemImage: "folder") }
             .tag(1)
             
-            NavigationView {
+            NavigationStack {
                 ActivityView(viewModel: viewModel)
             }
             .tabItem { Label("活动", systemImage: "clock.arrow.circlepath") }
             .tag(2)
             
-            NavigationView {
+            NavigationStack {
                 SettingsView()
                     .environmentObject(settings)
                     .environmentObject(viewModel)
@@ -45,16 +45,6 @@ struct ContentView: View {
         }
         .environmentObject(settings)
         .environmentObject(viewModel)
-        // 问卷弹窗提升到 TabView 层级：任何 Tab 下 Pi 提问都能直接弹出
-        .sheet(isPresented: $store.showQuestionnaire) {
-            QuestionnaireCard(
-                questions: store.questionnaireQuestions,
-                onSubmit: { answers in
-                    viewModel.submitQuestionnaire(answers)
-                },
-                onDismiss: { store.showQuestionnaire = false }
-            )
-        }
         .onAppear {
             viewModel.connect()
         }

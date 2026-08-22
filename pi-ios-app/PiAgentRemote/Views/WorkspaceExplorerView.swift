@@ -41,18 +41,17 @@ struct WorkspaceExplorerView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            Group {
-                if !isConnected {
-                    offlineView
-                } else if store.workspaceChildren.isEmpty && loadedRoots.isEmpty {
-                    loadingView
-                } else {
-                    explorerContent
-                }
+        Group {
+            if !isConnected {
+                offlineView
+            } else if store.workspaceChildren.isEmpty && loadedRoots.isEmpty {
+                loadingView
+            } else {
+                explorerContent
             }
-            .navigationTitle("Workspace")
-            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationTitle("Workspace")
+        .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -65,7 +64,6 @@ struct WorkspaceExplorerView: View {
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索文件名")
-        }
         .sheet(item: $selectedFile) { node in
             if let file = store.workspaceFiles[node.path] {
                 FileViewerView(file: file, viewModel: viewModel)

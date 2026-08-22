@@ -322,6 +322,26 @@ struct ChatView: View {
             
             Divider()
             
+            // 内联问卷卡片：Pi 提问时以卡片形式出现在输入框上方，不覆盖全屏
+            if store.showQuestionnaire {
+                QuestionnaireCard(
+                    questions: store.questionnaireQuestions,
+                    onSubmit: { answers in
+                        viewModel.submitQuestionnaire(answers)
+                    },
+                    onDismiss: { store.showQuestionnaire = false }
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .transition(
+                    reduceMotion
+                        ? .identity
+                        : .opacity.combined(with: .move(edge: .bottom))
+                            .combined(with: .scale(scale: 0.96))
+                )
+                .zIndex(1)
+            }
+            
             // 斜杠命令补全
             if !isVoiceActive && viewModel.inputText.hasPrefix("/") {
                 SlashSuggestionsView(input: viewModel.inputText) { cmd in
@@ -398,6 +418,7 @@ struct ChatView: View {
             .background(.regularMaterial)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.agentState)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: store.showQuestionnaire)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: speechService.state)
         .onChange(of: speechService.transcript) { transcript in
             guard speechService.state.isActive || speechService.state == .completed else { return }
