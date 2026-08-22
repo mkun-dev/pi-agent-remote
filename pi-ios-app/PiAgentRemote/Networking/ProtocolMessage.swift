@@ -51,7 +51,7 @@ struct ProtocolMessage: Codable {
         let model: String?
         let contextTokens: Int?
         let contextWindow: Int?
-        let contextPercent: Int?
+        let contextPercent: Double?
         let totalInput: Int?
         let totalOutput: Int?
         let totalCacheRead: Int?
@@ -107,7 +107,7 @@ struct ProtocolMessage: Codable {
             agentId: String? = nil, sessions: [SessionListItemPayload]? = nil,
             ok: Bool? = nil, id: String? = nil,
             model: String? = nil, contextTokens: Int? = nil, contextWindow: Int? = nil,
-            contextPercent: Int? = nil, totalInput: Int? = nil, totalOutput: Int? = nil,
+            contextPercent: Double? = nil, totalInput: Int? = nil, totalOutput: Int? = nil,
             totalCacheRead: Int? = nil, totalCacheWrite: Int? = nil,
             totalReasoning: Int? = nil, totalTokens: Int? = nil, totalCost: Double? = nil,
             models: [String]? = nil, modelId: String? = nil, message: String? = nil,
@@ -293,7 +293,7 @@ struct UsageInfo: Equatable {
     var model: String?
     var contextTokens: Int?
     var contextWindow: Int
-    var contextPercent: Int?
+    var contextPercent: Double?
     var totalInput: Int
     var totalOutput: Int
     var totalCacheRead: Int
@@ -310,7 +310,7 @@ struct UsageInfo: Equatable {
     
     /// 上下文占比显示（如 "35%"），未知显示 "—"
     var contextPercentText: String {
-        if let p = contextPercent { return "\(p)%" }
+        if let p = contextPercent { return "\(Int(p.rounded()))%" }
         return "—"
     }
     

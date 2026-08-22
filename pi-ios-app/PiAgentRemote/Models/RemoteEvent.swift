@@ -163,7 +163,7 @@ struct RemoteUsageEvent: Equatable {
     let model: String?
     let contextTokens: Int?
     let contextWindow: Int
-    let contextPercent: Int?
+    let contextPercent: Double?
     let totalInput: Int
     let totalOutput: Int
     let totalCacheRead: Int
@@ -173,7 +173,7 @@ struct RemoteUsageEvent: Equatable {
     let totalCost: Double
     
     var contextPercentText: String {
-        if let p = contextPercent { return "\(p)%" }
+        if let p = contextPercent { return "\(Int(p.rounded()))%" }
         return "—"
     }
     
