@@ -75,12 +75,22 @@ struct ChatView: View {
     @State private var showTaskTimeline = false
     @FocusState private var inputFocused: Bool
     @StateObject private var scrollController = ChatScrollController()
+    /// 分页：默认只显示最后 N 条历史消息；用户点「加载更多」后扩大窗口。
+    @State private var visibleLimit = 100
+    private let pageSize = 200
     
     /// 聊天窗口每次布局最多显示的可见消息。
     /// 直接从 store 实时计算，避免独立缓存层导致的流式内容过时和多余重算。
     /// ChatDisplayFilter 为轻量谓词过滤，消息量通常 <200，O(n) 开销可忽略。
     private var visibleMessages: [Message] {
-        ChatDisplayFilter.filter(store.messages)
+        let filtered = ChatDisplayFilter.filter(store.messages)
+        guard filtered.count > visibleLimit else { return filtered }
+        return Array(filtered.suffix(visibleLimit))
+    }
+    /// 因分页而被隐藏的消息数量（显示在顶部「加载更多」按钮上）。
+    private var hiddenMessageCount: Int {
+        let total = ChatDisplayFilter.filter(store.messages).count
+        return max(0, total - visibleLimit)
     }
     private let bottomAnchorID = "chat-scroll-bottom-anchor"
     
@@ -186,6 +196,27 @@ struct ChatView: View {
     @ViewBuilder
     private func messageListContent(msgs: [Message], messageIDs: [String]) -> some View {
         LazyVStack(alignment: .leading, spacing: 16) {
+            if hiddenMessageCount > 0 {
+                Button {
+                    visibleLimit += pageSize
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up")
+                        Text("还有 \(hiddenMessageCount) 条消息，点击加载")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.accentColor.opacity(0.4), lineWidth: 0.5)
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .padding(.bottom, 4)
+                .accessibilityIdentifier("load-more-messages")
+            }
             ForEach(msgs) { msg in
                 messageRowItem(for: msg)
             }
@@ -447,6 +478,7 @@ struct ChatView: View {
             selectedImagePreview = nil
             showTaskTimeline = false
             inputFocused = false
+            visibleLimit = 100
             scrollController.beginSessionRevision(revision)
             if speechService.state.isActive { cancelVoiceInput() }
         }

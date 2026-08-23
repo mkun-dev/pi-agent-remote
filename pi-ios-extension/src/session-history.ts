@@ -5,7 +5,7 @@ import type { HistoryEntry } from "./types.js";
  * SessionEntry 本身已有稳定 id；同一 SessionEntry 可能拆成正文、Tool、输出多条，
  * 因此在原 id 后追加稳定后缀，而不是在每次 resume 时生成随机 ID。
  */
-export function buildHistory(sm: any, max: number = 100): HistoryEntry[] {
+export function buildHistory(sm: any, max: number = 1000): HistoryEntry[] {
   try {
     let path: any[] = sm.buildContextEntries?.() ?? [];
     if (path.length > 1) {
@@ -107,7 +107,7 @@ export function buildHistory(sm: any, max: number = 100): HistoryEntry[] {
     });
 
     const limit = Math.max(0, Math.floor(max));
-    return limit === 0 ? [] : out.slice(-limit);
+    return limit === 0 ? out : out.slice(-limit);
   } catch (error) {
     console.error("❌ buildHistory failed:", error);
     return [];
