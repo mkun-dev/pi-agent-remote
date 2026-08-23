@@ -641,6 +641,8 @@ struct MessageRow: View, Equatable {
         .accessibilityIdentifier("compaction-divider")
     }
 
+    // MARK: - 居中状态提示（如 running）
+    private var statusRow: some View {
         Text(message.content)
             .font(.caption)
             .foregroundColor(.secondary)
