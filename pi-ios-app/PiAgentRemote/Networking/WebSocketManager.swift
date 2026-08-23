@@ -458,7 +458,7 @@ class WebSocketManager: ObservableObject {
             id: UUID().uuidString,
             type: "thinking.select",
             timestamp: Int(Date().timeIntervalSince1970 * 1000),
-            payload: ProtocolMessage.Payload(targetAgentId: currentAgentId, level: level, selectionRequestId: selectionRequestId)
+            payload: ProtocolMessage.Payload(targetAgentId: currentAgentId, selectionRequestId: selectionRequestId, level: level)
         )
         guard let data = try? JSONEncoder().encode(p),
               let json = String(data: data, encoding: .utf8) else { return }
