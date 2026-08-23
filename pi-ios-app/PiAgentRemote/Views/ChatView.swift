@@ -482,6 +482,23 @@ struct ChatView: View {
                 }
             )
         }
+        .sheet(isPresented: $viewModel.showThinkingPicker) {
+            let levels = store.availableThinkingLevels.isEmpty
+                ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+                : store.availableThinkingLevels
+            ThinkingPickerView(
+                levels: levels,
+                currentLevel: store.currentThinkingLevel,
+                isSwitching: viewModel.isSwitchingThinking,
+                onSelect: { level in
+                    viewModel.selectThinkingLevel(level)
+                },
+                onDismiss: {
+                    viewModel.showThinkingPicker = false
+                    store.thinkingPickerRequested = false
+                }
+            )
+        }
         .sheet(isPresented: $showPhotoPicker) {
             PhotoUploadView { images, caption in
                 viewModel.uploadMedia(images: images, caption: caption)
@@ -898,6 +915,111 @@ struct ModelPickerView: View {
     }
 }
 
+// MARK: - 思考强度选择器
+
+private extension String {
+    /// 思考强度级别的人类可读描述
+    var thinkingDescription: String {
+        switch self {
+        case "off":     return "不思考"
+        case "minimal": return "极少"
+        case "low":     return "低"
+        case "medium":  return "中"
+        case "high":    return "高"
+        case "xhigh":   return "非常高"
+        case "max":     return "最大"
+        default:        return self
+        }
+    }
+}
+
+struct ThinkingPickerView: View {
+    let levels: [String]
+    let currentLevel: String?
+    let isSwitching: Bool
+    let onSelect: (String) -> Void
+    let onDismiss: () -> Void
+    
+    @State private var pendingSelection: String? = nil
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                if let current = currentLevel, !current.isEmpty {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("当前思考强度")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("\(current) · \(current.thinkingDescription)")
+                                    .font(.headline)
+                            }
+                            Spacer()
+                            if isSwitching {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    } header: {
+                        Text("当前思考强度")
+                    }
+                }
+                
+                Section {
+                    ForEach(levels, id: \(self)) { level in
+                        Button {
+                            guard !isSwitching else { return }
+                            pendingSelection = level
+                            onSelect(level)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: level == currentLevel ? "largecircle.fill.circle" : "circle")
+                                    .foregroundStyle(level == currentLevel ? .purple : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(level)
+                                        .foregroundColor(.primary)
+                                        .font(.subheadline.weight(.medium))
+                                    Text(level.thinkingDescription)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if isSwitching && pendingSelection == level {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else if level == currentLevel {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.purple)
+                                        .font(.caption.weight(.semibold))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSwitching)
+                    }
+                } header: {
+                    Text("可选思考强度")
+                } footer: {
+                    Text("思考强度控制模型在回答前进行推理的深度。更高的级别会产生更详尽的思考，但耗时更长。")
+                        .font(.caption)
+                }
+            }
+            .navigationTitle("思考强度")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { onDismiss() }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - 斜杠命令补全（输入 / 弹出命令建议）
 
 /// 可用命令
@@ -909,6 +1031,7 @@ struct SlashCommand: Identifiable {
 
 private let slashCommands: [SlashCommand] = [
     SlashCommand(id: "/model", description: "切换 AI 模型", icon: "cpu"),
+    SlashCommand(id: "/thinking", description: "切换思考强度", icon: "brain.head.profile"),
     SlashCommand(id: "/ios-config", description: "查看中继配置", icon: "info.circle"),
     SlashCommand(id: "/new", description: "重置会话", icon: "arrow.counterclockwise"),
     SlashCommand(id: "/stop", description: "中断当前处理", icon: "stop.circle"),

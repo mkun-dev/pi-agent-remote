@@ -102,6 +102,10 @@ struct AgentStatusHeader: View {
                 modelBadge(model)
             }
             
+            if let level = store.currentThinkingLevel, !level.isEmpty, level != "off" {
+                thinkingBadge(level)
+            }
+            
             Spacer(minLength: 4)
             
             if store.agentState.isWorking {
@@ -290,6 +294,9 @@ struct AgentStatusHeader: View {
             if let model = displayModel {
                 modelBadge(model)
             }
+            if let level = store.currentThinkingLevel, !level.isEmpty, level != "off" {
+                thinkingBadge(level)
+            }
             
             if let session = store.sessionState {
                 sessionBadge(session.displayName)
@@ -360,6 +367,20 @@ struct AgentStatusHeader: View {
         .padding(.vertical, 2)
         .background(Color.secondary.opacity(0.1), in: Capsule())
         .accessibilityLabel("模型: \(model)")
+    }
+    
+    private func thinkingBadge(_ level: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 9))
+            Text(level)
+                .lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.secondary.opacity(0.1), in: Capsule())
+        .accessibilityLabel("思考强度: \(level)")
     }
     
     private func sessionBadge(_ name: String) -> some View {

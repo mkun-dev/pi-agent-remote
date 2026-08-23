@@ -68,6 +68,11 @@ struct ProtocolMessage: Codable {
         let generation: Int?
         let selectionRequestId: String?
         
+        // Thinking level — thinking.list / thinking.request / thinking.select / thinking.select_ack
+        let levels: [String]?
+        let current: String?
+        let level: String?
+        
         // Questionnaire
         let questions: [QuestionPayload]?
         let answers: [AnswerPayload]?
@@ -112,6 +117,7 @@ struct ProtocolMessage: Codable {
             totalReasoning: Int? = nil, totalTokens: Int? = nil, totalCost: Double? = nil,
             models: [String]? = nil, modelId: String? = nil, message: String? = nil,
             code: String? = nil, generation: Int? = nil, selectionRequestId: String? = nil,
+            levels: [String]? = nil, current: String? = nil, level: String? = nil,
             questions: [QuestionPayload]? = nil, answers: [AnswerPayload]? = nil,
             source: String? = nil,
             fileName: String? = nil, base64: String? = nil, dir: String? = nil,
@@ -137,6 +143,7 @@ struct ProtocolMessage: Codable {
             self.totalReasoning = totalReasoning; self.totalTokens = totalTokens; self.totalCost = totalCost
             self.models = models; self.modelId = modelId; self.message = message; self.code = code
             self.generation = generation; self.selectionRequestId = selectionRequestId
+            self.levels = levels; self.current = current; self.level = level
             self.questions = questions; self.answers = answers; self.source = source
             self.fileName = fileName; self.base64 = base64; self.dir = dir
             self.children = children; self.size = size; self.content = content

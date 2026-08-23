@@ -42,6 +42,7 @@ struct RemoteEvent: Identifiable, Equatable {
         case session(RemoteSessionEvent)
         case usage(RemoteUsageEvent)
         case model(RemoteModelEvent)
+        case thinking(RemoteThinkingEvent)
         case questionnaire(RemoteQuestionnaireEvent)
         case media(RemoteMediaEvent)
         case relay(RemoteRelayEvent)
@@ -186,6 +187,11 @@ struct RemoteUsageEvent: Equatable {
 enum RemoteModelEvent: Equatable {
     case list([String])
     case selectionAcknowledged(modelId: String, success: Bool, message: String?)
+}
+
+enum RemoteThinkingEvent: Equatable {
+    case list(levels: [String], current: String)
+    case selectionAcknowledged(level: String, success: Bool, message: String?)
 }
 
 struct RemoteQuestion: Equatable {

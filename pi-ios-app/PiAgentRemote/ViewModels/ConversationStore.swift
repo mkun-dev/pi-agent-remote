@@ -29,6 +29,12 @@ final class ConversationStore: ObservableObject {
     @Published private(set) var usageInfo: RemoteUsageEvent?
     /// UI 请求打开模型选择器（由 /model 命令或用户操作触发，非聊天消息）
     @Published var modelPickerRequested = false
+    
+    // Thinking level — single source of truth
+    @Published private(set) var availableThinkingLevels: [String] = []
+    @Published private(set) var currentThinkingLevel: String?
+    /// UI 请求打开思考强度选择器（由 /thinking 命令触发）
+    @Published var thinkingPickerRequested = false
     @Published private(set) var agents: [RemoteAgentDescriptor] = []
     @Published private(set) var currentAgentId: String?
     @Published private(set) var questionnaireQuestions: [ProtocolMessage.QuestionPayload] = []
@@ -63,6 +69,7 @@ final class ConversationStore: ObservableObject {
     private var pendingSessionFile: String?
     private var pendingModelSelectionRequestId: String?
     private var modelSelectionLock: ModelSelectionLock?
+    private var pendingThinkingSelectionRequestId: String?
     
     private struct ModelSelectionLock {
         let requestId: String
@@ -107,6 +114,9 @@ final class ConversationStore: ObservableObject {
             usageInfo = nil
             lastModelSelection = nil
             modelPickerRequested = false
+            availableThinkingLevels = []
+            currentThinkingLevel = nil
+            thinkingPickerRequested = false
             pendingUsageGeneration = nil
             pendingModelGeneration = nil
             pendingModelSelectionRequestId = nil
@@ -171,6 +181,10 @@ final class ConversationStore: ObservableObject {
     func beginModelSelection(requestId: String, modelId: String) {
         pendingModelSelectionRequestId = requestId
         RemoteLogger.model("[MODEL] begin selection requestId=\(requestId) model=\(modelId) generation=\(currentSnapshotGeneration)")
+    }
+    
+    func beginThinkingSelection(requestId: String, level: String) {
+        pendingThinkingSelectionRequestId = requestId
     }
     
     /// 中继层通过此方法更新 PC (agent) 在线状态。
@@ -287,6 +301,8 @@ final class ConversationStore: ObservableObject {
             handleSession(value, event: event)
         case .model(let value):
             handleModel(value, event: event)
+        case .thinking(let value):
+            handleThinking(value, event: event)
         case .questionnaire(let value):
             handleQuestionnaire(value, event: event)
         case .usage(let value):
@@ -838,6 +854,32 @@ final class ConversationStore: ObservableObject {
         }
     }
     
+    private func handleThinking(_ value: RemoteThinkingEvent, event: RemoteEvent) {
+        switch value {
+        case let .list(levels, current):
+            if !levels.isEmpty {
+                availableThinkingLevels = levels
+            }
+            if !current.isEmpty {
+                currentThinkingLevel = current
+            }
+        case let .selectionAcknowledged(level, success, message):
+            if success, !level.isEmpty {
+                currentThinkingLevel = level
+            }
+            pendingThinkingSelectionRequestId = nil
+            appendLog(LogEntry(
+                id: "log-system-\(event.id):\(eventSequence)",
+                timestamp: event.timestamp,
+                level: success ? .success : .error,
+                type: .system,
+                title: "SYSTEM",
+                content: boundedLog(message ?? (success ? "已切换思考强度: \(level)" : "切换思考强度失败: \(level)")),
+                isRunning: false
+            ))
+        }
+    }
+    
     private func handleUsage(_ value: RemoteUsageEvent, event: RemoteEvent) {
         usageInfo = value
         let agent = event.scope.agentId ?? currentAgentId ?? "nil"
@@ -1340,10 +1382,14 @@ final class ConversationStore: ObservableObject {
         latestAcceptedModelGeneration = nil
         pendingModelSelectionRequestId = nil
         modelSelectionLock = nil
+        pendingThinkingSelectionRequestId = nil
         availableModels = []
         currentModel = nil
         usageInfo = nil
         modelPickerRequested = false
+        availableThinkingLevels = []
+        currentThinkingLevel = nil
+        thinkingPickerRequested = false
         lastModelSelection = nil
         questionnaireQuestions = []
         showQuestionnaire = false

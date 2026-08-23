@@ -157,6 +157,17 @@ enum RemoteEventDecoder {
                 success: value.ok == true,
                 message: value.message
             ))
+        case "thinking.list":
+            return .thinking(.list(
+                levels: value.levels ?? [],
+                current: value.current ?? ""
+            ))
+        case "thinking.select_ack":
+            return .thinking(.selectionAcknowledged(
+                level: value.level ?? "",
+                success: value.ok == true,
+                message: value.message
+            ))
         case "questionnaire.show":
             let questions = (value.questions ?? []).map { question in
                 RemoteQuestion(

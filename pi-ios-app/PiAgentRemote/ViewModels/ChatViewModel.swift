@@ -6,8 +6,10 @@ class ChatViewModel: ObservableObject {
     let conversationStore = ConversationStore()
     @Published var inputText: String = ""
     @Published var showModelPicker = false
+    @Published var showThinkingPicker = false
     @Published var isLoadingSessions = false
     @Published var isSwitchingModel = false
+    @Published var isSwitchingThinking = false
     /// 当前激活的 Tab（0=聊天 1=文件 2=活动 3=设置）。由 Workspace/Chat 联动切换。
     @Published var activeTab: Int = 0
     
@@ -50,6 +52,22 @@ class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // Thinking picker 触发
+        conversationStore.$thinkingPickerRequested
+            .receive(on: DispatchQueue.main)
+            .filter { $0 }
+            .sink { [weak self] _ in
+                self?.showThinkingPicker = true
+            }
+            .store(in: &cancellables)
+        conversationStore.$thinkingPickerRequested
+            .receive(on: DispatchQueue.main)
+            .filter { !$0 }
+            .sink { [weak self] _ in
+                self?.showThinkingPicker = false
+            }
+            .store(in: &cancellables)
+        
         ws.onSessionSwitchAck = { [weak self] sessionFile, ok in
             guard let self = self else { return }
             if ok {
@@ -67,6 +85,10 @@ class ChatViewModel: ObservableObject {
         
         ws.onModelSelectAck = { _, _ in
             // 结果由 RemoteEvent → ConversationStore 统一处理；这里只保留兼容回调占位。
+        }
+        
+        ws.onThinkingSelectAck = { _, _ in
+            // 结果由 RemoteEvent → ConversationStore 统一处理
         }
         
         ws.onConnected = { [weak self] in
@@ -204,7 +226,9 @@ class ChatViewModel: ObservableObject {
     private func resetSessionScopedUIState() {
         inputText = ""
         showModelPicker = false
+        showThinkingPicker = false
         isSwitchingModel = false
+        isSwitchingThinking = false
         pendingImageUploads.removeAll()
         confirmedMediaFileNames.removeAll()
     }
@@ -218,6 +242,7 @@ class ChatViewModel: ObservableObject {
         ws.requestQuestionnaireSync(generation: generation)
         ws.requestUsage(generation: generation)
         ws.requestModelList(generation: generation)
+        ws.requestThinkingLevels(generation: generation)
         return generation
     }
     
@@ -247,6 +272,19 @@ class ChatViewModel: ObservableObject {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.conversationStore.modelPickerRequested = false
+        }
+    }
+    
+    func selectThinkingLevel(_ level: String) {
+        isSwitchingThinking = true
+        let requestId = UUID().uuidString
+        conversationStore.beginThinkingSelection(requestId: requestId, level: level)
+        ws.selectThinkingLevel(level, selectionRequestId: requestId)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            self?.isSwitchingThinking = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.conversationStore.thinkingPickerRequested = false
         }
     }
     
@@ -337,6 +375,13 @@ class ChatViewModel: ObservableObject {
         if text == "/model" || text == "/model " {
             conversationStore.requestModelPicker()
             _ = requestTargetSnapshot(reason: "model-picker")
+            return
+        }
+
+        // /thinking 无参数 → 请求列表并打开选择器；带参数则交给 extension 切换
+        if text == "/thinking" || text == "/thinking " || text == "/think" || text == "/think " {
+            conversationStore.thinkingPickerRequested = true
+            _ = requestTargetSnapshot(reason: "thinking-picker")
             return
         }
 

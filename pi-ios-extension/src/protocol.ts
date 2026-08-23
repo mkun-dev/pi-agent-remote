@@ -212,6 +212,29 @@ export class ProtocolHandler {
     };
   }
 
+  static createThinkingList(levels: string[], current: string, generation?: number): ProtocolMessage {
+    return {
+      id: `thinking_${uid()}`,
+      type: "thinking.list",
+      timestamp: Date.now(),
+      payload: { levels, current, ...(generation !== undefined ? { generation } : {}) }
+    };
+  }
+
+  static createThinkingSelectAck(level: string, ok: boolean, message?: string, selectionRequestId?: string): ProtocolMessage {
+    return {
+      id: `thinking_${uid()}`,
+      type: "thinking.select_ack",
+      timestamp: Date.now(),
+      payload: {
+        level,
+        ok,
+        ...(selectionRequestId ? { selectionRequestId } : {}),
+        message: message ?? (ok ? `✅ 已切换思考强度: ${level}` : `❌ 切换思考强度失败: ${level}`)
+      }
+    };
+  }
+
   static createQuestionnaireShow(questions: any[]): ProtocolMessage {
     return {
       id: `q_${uid()}`,

@@ -183,6 +183,22 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  /** 刷新会话消息数并广播 session.update（会话进行中 entryCount 会持续增长） */
+  function refreshSessionEntryCount(reason: string = "update"): void {
+    try {
+      if (!sessionProvider || !sessionManagerRef) return;
+      const current = sessionProvider();
+      const freshCount = sessionManagerRef.getEntries?.()?.length;
+      if (typeof freshCount === "number" && freshCount !== current.entryCount) {
+        const nextInfo = { ...current, entryCount: freshCount, reason };
+        sessionProvider = () => nextInfo;
+        broadcast(ProtocolHandler.createSessionUpdate(reason, nextInfo));
+      }
+    } catch (e) {
+      console.error("❌ refreshSessionEntryCount 失败:", e);
+    }
+  }
+
   async function handleUsageRequest(msg: any, respond: (event: unknown) => void): Promise<void> {
     const generation = typeof msg?.payload?.generation === "number" ? msg.payload.generation : undefined;
     try {
@@ -338,6 +354,11 @@ export default function (pi: ExtensionAPI) {
           void handleModelCommand(trimmed, emit);
           return;
         }
+        // 拦截 /thinking 命令：iOS 端切换思考强度（不发给 LLM）
+        if (trimmed.startsWith("/thinking") || trimmed.startsWith("/think")) {
+          void handleThinkingCommand(trimmed, emit);
+          return;
+        }
         // 拦截 /ios-config 命令：iOS 端查看中继配置
         if (trimmed.startsWith("/ios-config")) {
           void handleIosConfig(emit);
@@ -369,6 +390,8 @@ export default function (pi: ExtensionAPI) {
       }
     } else if (msg?.type === "session.resume") {
       if (sessionProvider) {
+        // 恢复前刷新 entryCount（断线期间消息数可能已变化）
+        refreshSessionEntryCount(reason: "resume");
         const info = sessionProvider();
         emit(ProtocolHandler.createSessionInfo(info));
         // Phase 3.5: 随 session.info 一起回放对话历史
@@ -393,6 +416,10 @@ export default function (pi: ExtensionAPI) {
       void handleModelRequest(msg, emit);
     } else if (msg?.type === "model.select") {
       void handleModelSelect(msg, emit);
+    } else if (msg?.type === "thinking.request") {
+      handleThinkingRequest(msg, emit);
+    } else if (msg?.type === "thinking.select") {
+      handleThinkingSelect(msg, emit);
     } else if (msg?.type === "questionnaire.answer") {
       handleQuestionnaireAnswer(msg, emit);
       // 缓存 iOS 答案（供 tool_result 替换使用）
@@ -482,6 +509,43 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  /**
+   * /thinking 命令：列出/切换思考强度（iOS 端远程控制）
+   * 用法: /thinking           列出可用思考强度
+   *       /thinking <级别>     切换到指定级别（off/minimal/low/medium/high/xhigh/max）
+   */
+  async function handleThinkingCommand(cmd: string, respond: (event: unknown) => void): Promise<void> {
+    const reply = (text: string) => respond(ProtocolHandler.createAgentOutput(text, "message"));
+    try {
+      const parts = cmd.trim().split(/\s+/);
+      const query = (parts[1] ?? "").toLowerCase();
+
+      const levels = pi.getAvailableThinkingLevels?.() ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+      const current = pi.getThinkingLevel?.() ?? "medium";
+
+      if (!query) {
+        // 发送思考强度列表（iOS 端弹出选择器）
+        respond(ProtocolHandler.createThinkingList(levels, current));
+        return;
+      }
+
+      // 模糊匹配级别
+      const target = levels.find((l: string) => l.toLowerCase() === query)
+        || levels.find((l: string) => l.toLowerCase().startsWith(query));
+      if (!target) {
+        reply(`❌ 未找到包含 "${parts[1]}" 的思考强度。\n可用级别: ${levels.join(", ")}`);
+        return;
+      }
+      pi.setThinkingLevel(target);
+      reply(`✅ 已切换思考强度: **${target}**`);
+      // 广播当前状态供所有 iOS 客户端同步
+      broadcast(ProtocolHandler.createThinkingList(levels, target));
+    } catch (e) {
+      console.error("❌ /thinking 处理失败:", e);
+      reply(`❌ /thinking 执行出错: ${e}`);
+    }
+  }
+
   async function handleModelRequest(msg: any, respond: (event: unknown) => void): Promise<void> {
     const generation = typeof msg?.payload?.generation === "number" ? msg.payload.generation : undefined;
     const models = await resolveAvailableModels();
@@ -520,6 +584,39 @@ export default function (pi: ExtensionAPI) {
     } catch (e) {
       console.error("❌ model.select 失败:", e);
       respond(ProtocolHandler.createModelSelectAck(modelId, false, `❌ 切换出错: ${e}`, selectionRequestId));
+    }
+  }
+
+  /** iOS 端请求思考强度列表 */
+  function handleThinkingRequest(msg: any, respond: (event: unknown) => void): void {
+    const generation = typeof msg?.payload?.generation === "number" ? msg.payload.generation : undefined;
+    const levels = pi.getAvailableThinkingLevels?.() ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+    const current = pi.getThinkingLevel?.() ?? "medium";
+    respond(ProtocolHandler.createThinkingList(levels, current, generation));
+  }
+
+  /** iOS 端选择器回调：切换思考强度 */
+  function handleThinkingSelect(msg: any, respond: (event: unknown) => void): void {
+    const level = msg?.payload?.level;
+    const selectionRequestId = typeof msg?.payload?.selectionRequestId === "string" ? msg.payload.selectionRequestId : undefined;
+    if (!level || typeof level !== "string") {
+      respond(ProtocolHandler.createThinkingSelectAck("", false, "❌ 未指定思考强度", selectionRequestId));
+      return;
+    }
+    try {
+      const levels = pi.getAvailableThinkingLevels?.() ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+      const target = levels.find((l: string) => l === level);
+      if (!target) {
+        respond(ProtocolHandler.createThinkingSelectAck(level, false, `❌ 无效的思考强度: ${level}`, selectionRequestId));
+        return;
+      }
+      pi.setThinkingLevel(target);
+      respond(ProtocolHandler.createThinkingSelectAck(target, true, undefined, selectionRequestId));
+      // 广播新状态供所有客户端同步
+      broadcast(ProtocolHandler.createThinkingList(levels, target));
+    } catch (e) {
+      console.error("❌ thinking.select 失败:", e);
+      respond(ProtocolHandler.createThinkingSelectAck(level, false, `❌ 切换出错: ${e}`, selectionRequestId));
     }
   }
 
@@ -1037,6 +1134,21 @@ export default function (pi: ExtensionAPI) {
     broadcast(ProtocolHandler.createSessionUpdate(reason, info));
     // 会话建立/切换后立即同步当前模型与用量快照。
     broadcastUsageInfo();
+    // 同步当前思考强度
+    try {
+      const levels = pi.getAvailableThinkingLevels?.() ?? [];
+      const current = pi.getThinkingLevel?.() ?? "medium";
+      broadcast(ProtocolHandler.createThinkingList(levels, current));
+    } catch {}
+  });
+
+  // PC 端切换思考强度时同步给 iOS
+  pi.on("thinking_level_select", async (event, _ctx) => {
+    try {
+      const level = (event as any).level ?? pi.getThinkingLevel?.() ?? "medium";
+      const levels = pi.getAvailableThinkingLevels?.() ?? [];
+      broadcast(ProtocolHandler.createThinkingList(levels, level));
+    } catch {}
   });
 
   pi.on("session_info_changed", async (event, _ctx) => {
@@ -1244,6 +1356,8 @@ export default function (pi: ExtensionAPI) {
     // 每轮完成后主动推送最新模型、上下文和累计用量，iOS 不再依赖轮询/手动刷新。
     // 不重算历史，避免当前 turn 尚未落盘时覆盖刚累计的 usage。
     broadcastUsageInfo(false);
+    // 刷新会话消息数（entryCount）—— 会话进行中不断增长，session_start 快照不会自动更新
+    refreshSessionEntryCount(reason: "turn_end");
   });
 
   // Agent 流式思考过程（增量 + 合并节流：每 60ms 静默后刷一次累积增量）
@@ -1604,6 +1718,8 @@ export default function (pi: ExtensionAPI) {
     agentBusy = true;
     agentFinalDisposition = "completed";
     activeToolStatuses.clear();
+    // 用户消息刚落盘，刷新 entryCount（不用等整轮结束）
+    refreshSessionEntryCount(reason: "user_input");
     broadcast(ProtocolHandler.createStatus("thinking", {
       description: "Pi 正在思考"
     }));

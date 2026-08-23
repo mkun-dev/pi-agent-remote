@@ -16,6 +16,8 @@ class WebSocketManager: ObservableObject {
     var onSessionSwitchAck: ((String, Bool) -> Void)?
     /// 模型切换结果回调（model.select_ack）
     var onModelSelectAck: ((String, Bool) -> Void)?
+    /// 思考强度切换结果回调（thinking.select_ack）
+    var onThinkingSelectAck: ((String, Bool) -> Void)?
     
     private var socket: WebSocket?
 
@@ -174,6 +176,10 @@ class WebSocketManager: ObservableObject {
             // 选择器触发由 ConversationStore.modelPickerRequested 管理（/model 命令）。
         } else if proto.type == "model.select_ack" {
             onModelSelectAck?(proto.payload.modelId ?? "", proto.payload.ok ?? false)
+        } else if proto.type == "thinking.list" {
+            // thinking.list 由 RemoteEvent → ConversationStore.handleThinking 处理
+        } else if proto.type == "thinking.select_ack" {
+            onThinkingSelectAck?(proto.payload.level ?? "", proto.payload.ok ?? false)
         } else if proto.type == "tool.start" {
             onAgentStateEvent?(.toolStarted(
                 tool: proto.payload.tool ?? "tool",
@@ -427,6 +433,32 @@ class WebSocketManager: ObservableObject {
             type: "model.request",
             timestamp: Int(Date().timeIntervalSince1970 * 1000),
             payload: ProtocolMessage.Payload(targetAgentId: currentAgentId, generation: generation)
+        )
+        guard let data = try? JSONEncoder().encode(p),
+              let json = String(data: data, encoding: .utf8) else { return }
+        socket?.write(string: json)
+    }
+
+    /// 请求当前可用思考强度列表
+    func requestThinkingLevels(generation: Int? = nil) {
+        let p = ProtocolMessage(
+            id: UUID().uuidString,
+            type: "thinking.request",
+            timestamp: Int(Date().timeIntervalSince1970 * 1000),
+            payload: ProtocolMessage.Payload(targetAgentId: currentAgentId, generation: generation)
+        )
+        guard let data = try? JSONEncoder().encode(p),
+              let json = String(data: data, encoding: .utf8) else { return }
+        socket?.write(string: json)
+    }
+
+    /// 切换思考强度
+    func selectThinkingLevel(_ level: String, selectionRequestId: String) {
+        let p = ProtocolMessage(
+            id: UUID().uuidString,
+            type: "thinking.select",
+            timestamp: Int(Date().timeIntervalSince1970 * 1000),
+            payload: ProtocolMessage.Payload(targetAgentId: currentAgentId, level: level, selectionRequestId: selectionRequestId)
         )
         guard let data = try? JSONEncoder().encode(p),
               let json = String(data: data, encoding: .utf8) else { return }
