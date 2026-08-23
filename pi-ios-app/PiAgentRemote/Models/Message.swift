@@ -76,6 +76,7 @@ struct Message: Identifiable, Equatable {
         case status        // 状态提示
         case fileChanges   // 文件变化摘要组
         case image         // 图片消息
+        case compaction    // 压缩分隔卡片（历史压缩点，特殊高亮）
     }
     
     /// 消息送达状态（NAT 穿透 ACK，Phase 3）

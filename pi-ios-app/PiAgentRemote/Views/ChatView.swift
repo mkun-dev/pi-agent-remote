@@ -599,13 +599,48 @@ struct MessageRow: View, Equatable {
             statusRow
         } else if message.kind == .terminal {
             EmptyView()
+        } else if message.kind == .compaction {
+            compactionRow
         } else {
             normalRow
         }
     }
     
-    // MARK: - 居中状态提示（如 running）
-    private var statusRow: some View {
+    // MARK: - 压缩分隔卡片（历史压缩点，琥珀色高亮）
+    private var compactionRow: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.merge")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(PiDesignSystem.Color.piBrand)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("历史压缩点")
+                        .font(PiDesignSystem.Font.captionBold)
+                        .foregroundStyle(PiDesignSystem.Color.piBrand)
+                    Text(message.content)
+                        .font(PiDesignSystem.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                Spacer(minLength: 0)
+            }
+            Text(message.timestamp, style: .time)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.accentColor.opacity(0.10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(PiDesignSystem.Color.piBrand.opacity(0.5),
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityIdentifier("compaction-divider")
+    }
+
         Text(message.content)
             .font(.caption)
             .foregroundColor(.secondary)
@@ -733,6 +768,8 @@ struct MessageRow: View, Equatable {
             ImageMessageView(message: message, onOpen: onSelectImage)
         case .status:
             EmptyView() // 已在 statusRow 单独处理
+        case .compaction:
+            EmptyView() // 已在 compactionRow 单独处理
         }
     }
     

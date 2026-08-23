@@ -1267,6 +1267,8 @@ final class ConversationStore: ObservableObject {
             case "terminal":
                 messages.append(Message(id: id, sender: .pi, content: entry.text, timestamp: entry.timestamp, kind: .terminal, isHistory: true))
                 appendLog(outputLog(entry.text, id: id, timestamp: entry.timestamp))
+            case "compaction":
+                messages.append(Message(id: id, sender: .pi, content: entry.text ?? "", timestamp: entry.timestamp, kind: .compaction, isHistory: true))
             default:
                 break
             }

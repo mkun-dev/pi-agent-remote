@@ -19,7 +19,9 @@ export class RelayClient {
   private token: string;
   private agentMeta: AgentMeta | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private opened = false;  // 区分连接阶段错误 vs 运行中抖动
   private onMessage?: (data: string) => void;
   private onStatusChange?: (connected: boolean) => void;
 
@@ -62,7 +64,15 @@ export class RelayClient {
     this.ws = ws;
 
     ws.on("open", () => {
+      this.opened = true;
       this.onStatusChange?.(true);
+      // 心跳保活：每 30s 发一个 ping，防止 NAT/防火墙清理空闲连接
+      // （偶发 socket hang up 的根因就是中间设备悄悄丢弃了空闲 TCP）
+      this.heartbeatTimer = setInterval(() => {
+        if (this.ws === ws && ws.readyState === WebSocket.OPEN) {
+          try { ws.ping(); } catch { /* 连接已断，等 close 回调清理 */ }
+        }
+      }, 30_000);
     });
 
     ws.on("message", (data) => {
@@ -74,12 +84,20 @@ export class RelayClient {
       // 防止 Old socket 的 close 事件覆盖新连接（close → reconnect 时竞态）
       if (this.ws !== ws) return;
       this.ws = null;
+      this.opened = false;
+      if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
       this.onStatusChange?.(false);
       this.scheduleReconnect();
     });
 
     ws.on("error", (err) => {
-      console.error(`❌ 中继连接错误: ${err.message}`);
+      // 连接阶段错误（从未 open 过）= 服务端不可达，标红；
+      // 运行中错误（已经 open 过）= 网络抖动 / NAT 清理，偶发且有自动重连兑底，降级为 warn。
+      if (this.opened) {
+        console.warn(`⚠️ 中继网络抖动（将自动重连）: ${err.message}`);
+      } else {
+        console.error(`❌ 中继连接失败: ${err.message}`);
+      }
     });
   }
 
@@ -99,6 +117,7 @@ export class RelayClient {
     this.stopped = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
     if (this.ws) {
       try {
         this.ws.close();

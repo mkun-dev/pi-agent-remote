@@ -7,7 +7,10 @@ import type { HistoryEntry } from "./types.js";
  */
 export function buildHistory(sm: any, max: number = 1000): HistoryEntry[] {
   try {
-    let path: any[] = sm.buildContextEntries?.() ?? [];
+    // 关键：用完整分支路径（leaf → root），而不是 buildContextEntries()。
+    // buildContextEntries 会应用 compaction 截断，只返回最近一次压缩之后的上下文窗口，
+    // 导致 UI 看不到完整历史。用户需要看到整条会话分支的所有消息。
+    let path: any[] = buildFullSessionPath(sm);
     if (path.length > 1) {
       const firstTs = timestampOf(path[0]?.timestamp);
       const lastTs = timestampOf(path[path.length - 1]?.timestamp);
@@ -98,11 +101,25 @@ export function buildHistory(sm: any, max: number = 1000): HistoryEntry[] {
 
       if (entry?.type === "message" && entry.message) {
         pushAgentMessage(entry.message, ts, sourceEntryId);
-      } else if (entry?.type === "compaction" && Array.isArray(entry.retainedTail)) {
-        // 兼容旧 Session 格式中的 retainedTail；使用 compaction id + 数组位置保持稳定。
-        entry.retainedTail.forEach((message: any, tailIndex: number) => {
-          pushAgentMessage(message, ts, `${sourceEntryId}:retained:${tailIndex}`);
-        });
+      } else if (entry?.type === "compaction") {
+        // 压缩点：作为独立分隔卡片发给 iOS，UI 用特殊颜色高亮。
+        // 旧格式可能带 retainedTail（已在下方兼容），新格式仅存 summary。
+        const summary = String(entry.summary ?? entry.compactionSummary ?? "").trim();
+        if (summary) {
+          out.push({
+            entryId: `${sourceEntryId}:compaction`,
+            sessionId,
+            role: "compaction",
+            text: summary.slice(0, 4000),
+            ts
+          });
+        }
+        if (Array.isArray(entry.retainedTail)) {
+          // 兼容旧 Session 格式中的 retainedTail；使用 compaction id + 数组位置保持稳定。
+          entry.retainedTail.forEach((message: any, tailIndex: number) => {
+            pushAgentMessage(message, ts, `${sourceEntryId}:retained:${tailIndex}`);
+          });
+        }
       }
     });
 
@@ -117,4 +134,35 @@ export function buildHistory(sm: any, max: number = 1000): HistoryEntry[] {
 function timestampOf(value: unknown): number {
   const timestamp = new Date((value as string | number | Date | undefined) ?? 0).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+/**
+ * 遍历完整会话分支路径（leaf → root），不应用 compaction 截断。
+ * 复刻 SessionManager 内部 buildSessionPath 逻辑，因为该函数未导出。
+ * 返回按时间正序排列的全部条目（含被 compaction 压缩掉的旧消息）。
+ */
+function buildFullSessionPath(sm: any): any[] {
+  try {
+    const entries: any[] = sm.getEntries?.() ?? [];
+    const leafId = sm.leafId;
+    const byId: Map<string, any> = sm.byId ?? new Map();
+    if (!entries.length) return [];
+
+    let leaf: any;
+    if (leafId) leaf = byId.get(leafId);
+    if (!leaf) leaf = entries[entries.length - 1];
+    if (!leaf) return [];
+
+    const path: any[] = [];
+    let current: any = leaf;
+    while (current) {
+      path.push(current);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    path.reverse();
+    return path;
+  } catch (error) {
+    console.error("❌ buildFullSessionPath failed:", error);
+    return [];
+  }
 }
