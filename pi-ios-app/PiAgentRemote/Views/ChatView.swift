@@ -970,7 +970,7 @@ struct ThinkingPickerView: View {
                 }
                 
                 Section {
-                    ForEach(levels, id: \(self)) { level in
+                    ForEach(levels, id: \.self) { level in
                         Button {
                             guard !isSwitching else { return }
                             pendingSelection = level

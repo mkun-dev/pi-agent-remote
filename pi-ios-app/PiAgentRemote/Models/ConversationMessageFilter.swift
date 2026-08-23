@@ -50,7 +50,7 @@ enum ConversationMessageFilter {
             }
         case .media:
             return true       // media.image → 图片消息
-        case .workspace, .model, .usage, .questionnaire, .relay, .unknown:
+        case .workspace, .model, .thinking, .usage, .questionnaire, .relay, .unknown:
             return false      // 系统 / 调试事件，禁止进入聊天
         }
     }
@@ -59,7 +59,7 @@ enum ConversationMessageFilter {
     static func kind(of payload: RemoteEvent.Payload) -> EntryKind {
         if allowsMessageEntry(payload) { return .conversation }
         switch payload {
-        case .workspace, .model, .usage, .relay:
+        case .workspace, .model, .thinking, .usage, .relay:
             return .debugLog
         default:
             return .systemEvent
@@ -101,6 +101,11 @@ enum ConversationMessageFilter {
             switch event {
             case .list: return "model.list"
             case .selectionAcknowledged: return "model.select_ack"
+            }
+        case .thinking(let event):
+            switch event {
+            case .list: return "thinking.list"
+            case .selectionAcknowledged: return "thinking.select_ack"
             }
         case .questionnaire(let event):
             switch event {
